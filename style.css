@@ -1,0 +1,91 @@
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: #111822;
+  color: #edf2ff;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+main {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  box-sizing: border-box;
+}
+
+.panel {
+  width: min(560px, 94vw);
+  background: #172033;
+  border: 1px solid #33425f;
+  border-radius: 18px;
+  padding: 26px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.35);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+p {
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.row, .join {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+input, button {
+  font: inherit;
+  border-radius: 12px;
+  border: 1px solid #4b5f82;
+  padding: 12px 14px;
+}
+
+input {
+  flex: 1;
+  background: #0f172a;
+  color: white;
+}
+
+button {
+  background: #6ee7b7;
+  color: #08111f;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+.small {
+  font-size: 13px;
+}
+
+.hidden {
+  display: none;
+}
+
+canvas {
+  display: block;
+  background: radial-gradient(circle at center, #243047, #111822);
+  border: 2px solid #405069;
+  box-shadow: 0 0 40px rgba(0,0,0,.55);
+  max-width: 95vw;
+  height: auto;
+}
+
+.hud {
+  width: min(960px, 95vw);
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  color: #cbd5e1;
+  font-size: 14px;
+}

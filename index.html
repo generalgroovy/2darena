@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Peer-Hosted Arena Shooter</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <section id="lobby" class="panel">
+      <h1>Peer-Hosted Arena Shooter</h1>
+      <p>One player hosts. Up to 15 others join with the host code.</p>
+
+      <div class="row">
+        <button id="hostBtn">Host Game</button>
+      </div>
+
+      <div class="join">
+        <input id="joinCode" placeholder="Host code" spellcheck="false" />
+        <button id="joinBtn">Join Game</button>
+      </div>
+
+      <p id="status">Not connected.</p>
+      <p class="small">
+        Controls: WASD/arrows move · mouse aims · left click shoots · host simulates the match.
+      </p>
+    </section>
+
+    <section id="gameWrap" class="hidden">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div class="hud">
+        <div id="roomInfo">Room: —</div>
+        <div id="stats">Players: 0 · Enemies: 0 · Score: 0</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
