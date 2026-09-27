@@ -36,6 +36,18 @@ function shortCode() {
 
 function setStatus(text) {
   statusEl.textContent = text;
+  document.getElementById("gameStatus").textContent = text;
+}
+
+function sanitizeInput(input) {
+  const value = input && typeof input === "object" ? input : {};
+  return {
+    up: value.up === true, down: value.down === true,
+    left: value.left === true, right: value.right === true,
+    shoot: value.shoot === true,
+    mx: Number.isFinite(value.mx) ? clamp(value.mx, 0, W) : W / 2,
+    my: Number.isFinite(value.my) ? clamp(value.my, 0, H) : H / 2
+  };
 }
 
 function showGame(roomCode) {
@@ -96,7 +108,7 @@ function hostGame() {
     conn.on("data", msg => {
       if (!msg || typeof msg !== "object") return;
       if (msg.type === "input" && world.players[conn.peer]) {
-        world.players[conn.peer].input = msg.input;
+        world.players[conn.peer].input = sanitizeInput(msg.input);
       }
     });
 
@@ -407,8 +419,13 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-window.addEventListener("keydown", e => keys.add(e.key.toLowerCase()));
+window.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName)) return;
+  if (e.key.startsWith("Arrow")) e.preventDefault();
+  keys.add(e.key.toLowerCase());
+});
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => { keys.clear(); mouse.down = false; });
 
 canvas.addEventListener("mousemove", e => {
   const rect = canvas.getBoundingClientRect();

@@ -17,7 +17,7 @@
       </div>
 
       <div class="join">
-        <input id="joinCode" placeholder="Host code" spellcheck="false" />
+        <input id="joinCode" aria-label="Host code" placeholder="Host code" spellcheck="false" />
         <button id="joinBtn">Join Game</button>
       </div>
 
@@ -30,6 +30,7 @@
     <section id="gameWrap" class="hidden">
       <canvas id="game" width="960" height="540"></canvas>
       <div class="hud">
+        <div id="gameStatus" role="status"></div>
         <div id="roomInfo">Room: —</div>
         <div id="stats">Players: 0 · Enemies: 0 · Score: 0</div>
       </div>
