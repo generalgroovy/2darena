@@ -1,44 +1,41 @@
 # Peer-Hosted Arena Shooter
 
-A static GitHub Pages-compatible top-down arena shooter where one browser hosts and up to 15 other players join.
+A cooperative top-down browser shooter. One browser simulates the match and other players join with its room code. The configured room limit is 16 players; that limit is not a measured network-capacity guarantee.
 
-## How it works
+## Run and join
 
-- The host clicks **Host Game** and receives a room code.
-- Other players open the same GitHub Pages URL, enter the host code, and click **Join Game**.
-- The host browser runs the authoritative simulation.
-- Clients send input to the host.
-- The host broadcasts game snapshots.
-- The room is capped at 16 players total.
+Serve this directory with Python 3 and open `http://localhost:8080`:
 
-## Important networking note
+```sh
+python -m http.server 8080
+```
 
-This version uses PeerJS over WebRTC. GitHub Pages can host the static client, but browser-to-browser discovery still needs a signaling service. By default, PeerJS uses PeerServer Cloud. For production, host your own PeerServer.
+There is no npm install or build step. The page downloads PeerJS 1.5.5 from cdnjs and uses its default signaling service, so creating a room requires network access even when serving locally.
 
-## Deploy on GitHub Pages
+1. The host chooses **Host Game** and shares the displayed `arena-...` code.
+2. Guests open the same game version, enter that code and choose **Join Game** or press Enter.
+3. Move with **WASD/arrows**, aim with the mouse and fire with the **left mouse button**.
+4. Use **Leave room** to return to the lobby. If the host leaves, guests must create or join another room.
 
-1. Upload `index.html`, `style.css`, and `game.js` to your repository.
-2. Enable GitHub Pages from the repository settings.
-3. Open the Pages URL.
-4. One player clicks **Host Game**.
-5. Other players use the host code.
+Connection failures and disconnections return to a usable lobby. A connection attempt times out after 15 seconds. Repeated clicks do not create multiple peers. Leaving cancels simulation/render timers and invalidates callbacks from the old room before retrying.
 
-## Controls
+## Network and save behavior
 
-- Move: WASD or arrow keys
-- Aim: mouse
-- Shoot: left mouse button
+PeerJS uses WebRTC data connections and a signaling service; static hosting alone does not provide matchmaking. NAT/firewall restrictions can prevent peers from reaching one another. There is no bundled TURN relay or dedicated authoritative game server. Hosting quality depends on the host's machine and network; keep the host tab active.
 
-## Limits
+The host simulates at 30 ticks per second and sends snapshots at 20 per second. Clients submit inputs; the host owns the game state. Losing local window focus clears held movement/firing but does not pause everyone's match. Room migration and reconnect-to-existing-player recovery are not implemented.
 
-- 16 players total
-- Best for small private matches
-- Host quality depends on the host player's browser, network, and NAT/firewall conditions
-- For competitive or public play, use a dedicated authoritative WebSocket server instead
+All scores and match state are memory-only. Reload, host closure or leaving discards the session. There is no account, persistent world or cloud save. This is a private-match prototype, not a hardened public competitive service.
 
-## References
+## Development and deployment
 
-- PeerJS: https://peerjs.com/
-- PeerServer: https://peerjs.com/server/getting-started
-- cdnjs PeerJS package: https://cdnjs.com/libraries/peerjs
-- GitHub Pages: https://docs.github.com/en/pages
+```sh
+node --check game.js
+node --test tests/*.test.cjs
+```
+
+Tests cover malformed input, focus release, timer/peer cleanup, stale callbacks, double-click prevention, failure/timeout retries and full-room handling using simulated PeerJS events. They do not prove physical-network connectivity, signaling uptime or 16-player performance.
+
+For a real smoke test, host in one browser and join from a second; verify movement/fire, guest leave/rejoin, host closure and retry. Repeat on the target physical network before claiming connectivity.
+
+Deploy `index.html`, `style.css` and `game.js` to a static HTTPS host such as GitHub Pages. The external PeerJS script and signaling service must remain reachable. Configure an explicitly managed PeerServer/relay deployment before relying on this prototype for public use.

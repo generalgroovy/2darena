@@ -29,6 +29,63 @@ let mouse = { x: W / 2, y: H / 2, down: false };
 let snapshot = { players: {}, bullets: [], enemies: [], particles: [], score: 0, wave: 1 };
 let world = null;
 let lastSendInput = 0;
+let session = 0;
+let sessionTimers = [];
+let animationFrame = null;
+let connectionTimeout = null;
+
+function stopSession(message = "Left room.") {
+  session += 1; // Invalidate late callbacks before closing their connections.
+  const previousPeer = peer;
+  peer = null;
+  hostConn = null;
+  conns.clear();
+  world = null;
+  isHost = false;
+  myId = null;
+  hostId = null;
+  keys.clear();
+  mouse.down = false;
+  lastSendInput = 0;
+  snapshot = { players: {}, bullets: [], enemies: [], particles: [], score: 0, wave: 1 };
+  for (const timer of sessionTimers) clearInterval(timer);
+  sessionTimers = [];
+  clearTimeout(connectionTimeout);
+  connectionTimeout = null;
+  if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+  animationFrame = null;
+  if (previousPeer) previousPeer.destroy();
+  hostBtn.disabled = false;
+  joinBtn.disabled = false;
+  lobby.classList.remove("hidden");
+  gameWrap.classList.add("hidden");
+  setStatus(message);
+}
+
+function beginSession(hosting, code) {
+  stopSession(hosting ? "Opening room..." : "Connecting...");
+  const token = session;
+  isHost = hosting;
+  hostId = code;
+  hostBtn.disabled = true;
+  joinBtn.disabled = true;
+  try { peer = hosting ? new Peer(code) : new Peer(); }
+  catch { stopSession("Connection unavailable. Check your connection and try again."); return null; }
+  const currentPeer = peer;
+  connectionTimeout = setTimeout(() => {
+    if (session === token) stopSession("Connection timed out. Check the room code and try again.");
+  }, 15000);
+  currentPeer.on("error", err => {
+    if (session === token) stopSession(`Connection error: ${err.type || err.message}. Try again.`);
+  });
+  currentPeer.on("disconnected", () => {
+    if (session === token) stopSession("Signaling disconnected. Reopen or rejoin the room.");
+  });
+  currentPeer.on("close", () => {
+    if (session === token) stopSession("Room closed. You can host or join again.");
+  });
+  return { token, currentPeer };
+}
 
 function shortCode() {
   return "arena-" + Math.random().toString(36).slice(2, 8);
@@ -77,81 +134,75 @@ function makePlayer(id, name) {
 }
 
 function hostGame() {
-  isHost = true;
-  hostId = shortCode();
-  peer = new Peer(hostId);
-
-  peer.on("open", id => {
+  if (hostBtn.disabled) return;
+  const started = beginSession(true, shortCode());
+  if (!started) return;
+  const { token, currentPeer } = started;
+  currentPeer.on("open", id => {
+    if (session !== token) return;
+    clearTimeout(connectionTimeout);
     myId = id;
     initWorld();
     world.players[myId] = makePlayer(myId, "Host");
     showGame(id);
     setStatus(`Hosting as ${id}`);
-    setInterval(hostTick, 1000 / TICK_RATE);
-    setInterval(broadcastSnapshot, 1000 / SNAPSHOT_RATE);
-    requestAnimationFrame(drawLoop);
+    sessionTimers = [setInterval(hostTick, 1000 / TICK_RATE), setInterval(broadcastSnapshot, 1000 / SNAPSHOT_RATE)];
+    animationFrame = requestAnimationFrame(drawLoop);
   });
-
-  peer.on("connection", conn => {
+  currentPeer.on("connection", conn => {
+    if (session !== token) { conn.close(); return; }
     conn.on("open", () => {
+      if (session !== token || !world) { conn.close(); return; }
       if (Object.keys(world.players).length >= MAX_PLAYERS) {
         conn.send({ type: "full" });
         conn.close();
         return;
       }
-
       conns.set(conn.peer, conn);
       world.players[conn.peer] = makePlayer(conn.peer, `P${Object.keys(world.players).length + 1}`);
       conn.send({ type: "welcome", id: conn.peer, hostId, maxPlayers: MAX_PLAYERS });
     });
-
     conn.on("data", msg => {
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type === "input" && world.players[conn.peer]) {
-        world.players[conn.peer].input = sanitizeInput(msg.input);
-      }
+      if (session !== token || conns.get(conn.peer) !== conn || !msg || typeof msg !== "object") return;
+      if (msg.type === "input" && world?.players[conn.peer]) world.players[conn.peer].input = sanitizeInput(msg.input);
     });
-
-    conn.on("close", () => {
+    const removeGuest = () => {
+      if (session !== token || conns.get(conn.peer) !== conn) return;
       conns.delete(conn.peer);
-      if (world?.players?.[conn.peer]) delete world.players[conn.peer];
-    });
+      if (world?.players[conn.peer]) delete world.players[conn.peer];
+    };
+    conn.on("close", removeGuest);
+    conn.on("error", removeGuest);
   });
-
-  peer.on("error", err => setStatus(`Host error: ${err.type || err.message}`));
 }
 
 function joinGame() {
+  if (joinBtn.disabled) return;
   const code = joinCodeEl.value.trim();
-  if (!code) {
-    setStatus("Enter a host code.");
-    return;
-  }
-
-  isHost = false;
-  hostId = code;
-  peer = new Peer();
-
-  peer.on("open", id => {
+  if (!code) { setStatus("Enter a host code."); return; }
+  const started = beginSession(false, code);
+  if (!started) return;
+  const { token, currentPeer } = started;
+  currentPeer.on("open", id => {
+    if (session !== token) return;
     myId = id;
-    hostConn = peer.connect(code, { reliable: false });
-
-    hostConn.on("open", () => {
+    const conn = currentPeer.connect(code, { reliable: false });
+    hostConn = conn;
+    conn.on("open", () => {
+      if (session !== token) return;
+      clearTimeout(connectionTimeout);
       showGame(code);
       setStatus(`Connected to ${code}`);
-      requestAnimationFrame(clientLoop);
+      animationFrame = requestAnimationFrame(clientLoop);
     });
-
-    hostConn.on("data", msg => {
-      if (!msg || typeof msg !== "object") return;
-      if (msg.type === "snapshot") snapshot = msg.snapshot;
-      if (msg.type === "full") setStatus("Room is full.");
+    conn.on("data", msg => {
+      if (session !== token || !msg || typeof msg !== "object") return;
+      if (msg.type === "snapshot" && msg.snapshot?.players && Array.isArray(msg.snapshot.bullets) && Array.isArray(msg.snapshot.enemies) && Array.isArray(msg.snapshot.particles)) snapshot = msg.snapshot;
+      if (msg.type === "full") stopSession("Room is full. Try another room.");
     });
-
-    hostConn.on("close", () => setStatus("Disconnected from host."));
+    conn.on("close", () => { if (session === token) stopSession("Disconnected from host. You can join again."); });
+    conn.on("error", () => { if (session === token) stopSession("Host connection failed. You can join again."); });
   });
-
-  peer.on("error", err => setStatus(`Join error: ${err.type || err.message}`));
 }
 
 function localInput() {
@@ -329,17 +380,19 @@ function compressWorld(w) {
 }
 
 function clientLoop(now) {
+  if (!peer || isHost) return;
   if (hostConn?.open && now - lastSendInput > 33) {
     hostConn.send({ type: "input", input: localInput() });
     lastSendInput = now;
   }
   drawSnapshot(snapshot);
-  requestAnimationFrame(clientLoop);
+  animationFrame = requestAnimationFrame(clientLoop);
 }
 
 function drawLoop() {
+  if (!peer || !isHost) return;
   drawSnapshot(snapshot);
-  requestAnimationFrame(drawLoop);
+  animationFrame = requestAnimationFrame(drawLoop);
 }
 
 function drawSnapshot(s) {
@@ -440,3 +493,5 @@ joinBtn.addEventListener("click", joinGame);
 joinCodeEl.addEventListener("keydown", e => {
   if (e.key === "Enter") joinGame();
 });
+
+document.getElementById("leaveBtn").addEventListener("click", () => stopSession());
