@@ -33,8 +33,9 @@ let session = 0;
 let sessionTimers = [];
 let animationFrame = null;
 let connectionTimeout = null;
+let lobbyReturnFocus = hostBtn;
 
-function stopSession(message = "Left room.") {
+function stopSession(message = "Left room.", restoreFocus = true) {
   session += 1; // Invalidate late callbacks before closing their connections.
   const previousPeer = peer;
   peer = null;
@@ -60,10 +61,12 @@ function stopSession(message = "Left room.") {
   lobby.classList.remove("hidden");
   gameWrap.classList.add("hidden");
   setStatus(message);
+  if (restoreFocus) lobbyReturnFocus.focus();
 }
 
 function beginSession(hosting, code) {
-  stopSession(hosting ? "Opening room..." : "Connecting...");
+  stopSession(hosting ? "Opening room..." : "Connecting...", false);
+  lobbyReturnFocus = hosting ? hostBtn : joinCodeEl;
   const token = session;
   isHost = hosting;
   hostId = code;
@@ -111,6 +114,7 @@ function showGame(roomCode) {
   lobby.classList.add("hidden");
   gameWrap.classList.remove("hidden");
   roomInfoEl.textContent = `Room: ${roomCode}${isHost ? " · hosting" : ""}`;
+  canvas.focus();
 }
 
 function initWorld() {
@@ -179,7 +183,7 @@ function hostGame() {
 function joinGame() {
   if (joinBtn.disabled) return;
   const code = joinCodeEl.value.trim();
-  if (!code) { setStatus("Enter a host code."); return; }
+  if (!code) { setStatus("Enter a host code."); joinCodeEl.focus(); return; }
   const started = beginSession(false, code);
   if (!started) return;
   const { token, currentPeer } = started;
@@ -485,7 +489,11 @@ canvas.addEventListener("mousemove", e => {
   mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
   mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
 });
-canvas.addEventListener("mousedown", () => mouse.down = true);
+canvas.addEventListener("mousedown", e => {
+  if (e.button !== 0) return;
+  canvas.focus();
+  mouse.down = true;
+});
 window.addEventListener("mouseup", () => mouse.down = false);
 
 hostBtn.addEventListener("click", hostGame);

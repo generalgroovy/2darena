@@ -3,10 +3,10 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const {readFileSync}=require('node:fs');
 function setup(){
-  const events={},elements=new Map();
-  const context=vm.createContext({document:{getElementById(id){if(!elements.has(id))elements.set(id,{addEventListener(){},getContext(){return {};}});return elements.get(id);}},window:{addEventListener(name,fn){events[name]=fn;}},Math,Number,Map,Set});
+  const events={},elements=new Map(),canvasEvents={};
+  const context=vm.createContext({document:{getElementById(id){if(!elements.has(id))elements.set(id,{focus(){},addEventListener(name,fn){if(id==='game')canvasEvents[name]=fn;},getContext(){return {};}});return elements.get(id);}},window:{addEventListener(name,fn){events[name]=fn;}},Math,Number,Map,Set});
   vm.runInContext(readFileSync(require('node:path').join(__dirname,'..','game.js'),'utf8'),context);
-  return {events,elements,run:code=>vm.runInContext(code,context)};
+  return {events,elements,canvasEvents,run:code=>vm.runInContext(code,context)};
 }
 test('malformed remote input becomes finite neutral controls',()=>{
   const app=setup();
@@ -30,4 +30,11 @@ test('losing focus clears held movement and firing; code input does not move pla
 test('connection state remains visible while lobby is hidden',()=>{
   const app=setup();app.run("setStatus('Disconnected from host.')");
   assert.equal(app.elements.get('gameStatus').textContent,'Disconnected from host.');
+});
+
+test('only the primary mouse button fires',()=>{
+  const app=setup();
+  app.canvasEvents.mousedown({button:2});assert.equal(app.run('localInput().shoot'),false);
+  app.canvasEvents.mousedown({button:0});assert.equal(app.run('localInput().shoot'),true);
+  app.events.mouseup();assert.equal(app.run('localInput().shoot'),false);
 });

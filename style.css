@@ -1,3 +1,7 @@
+* {
+  box-sizing: border-box;
+}
+
 html, body {
   margin: 0;
   min-height: 100%;
@@ -15,7 +19,8 @@ main {
 }
 
 .panel {
-  width: min(560px, 94vw);
+  width: min(560px, 100%);
+  min-width: 0;
   background: #172033;
   border: 1px solid #33425f;
   border-radius: 18px;
@@ -48,6 +53,7 @@ input, button {
 
 input {
   flex: 1;
+  min-width: 0;
   background: #0f172a;
   color: white;
 }
@@ -63,6 +69,16 @@ button:hover {
   filter: brightness(1.08);
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+:focus-visible {
+  outline: 3px solid #fcd34d;
+  outline-offset: 3px;
+}
+
 .small {
   font-size: 13px;
 }
@@ -71,21 +87,33 @@ button:hover {
   display: none;
 }
 
+#gameWrap {
+  width: min(960px, 100%);
+  min-width: 0;
+}
+
 canvas {
   display: block;
   background: radial-gradient(circle at center, #243047, #111822);
   border: 2px solid #405069;
   box-shadow: 0 0 40px rgba(0,0,0,.55);
-  max-width: 95vw;
+  width: 100%;
   height: auto;
 }
 
 .hud {
-  width: min(960px, 95vw);
+  width: 100%;
   margin-top: 10px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 14px;
   color: #cbd5e1;
   font-size: 14px;
+}
+
+.hud > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
