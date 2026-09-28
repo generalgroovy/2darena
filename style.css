@@ -117,3 +117,7 @@ canvas {
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+
+[hidden] { display: none !important; }
+#inviteLink { width: 100%; margin-top: 12px; }
+summary { cursor: pointer; padding: 10px 0; }

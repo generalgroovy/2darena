@@ -12,10 +12,12 @@ python -m http.server 8080
 
 There is no npm install or build step. The page downloads PeerJS 1.5.5 from cdnjs and uses its default signaling service, so creating a room requires network access even when serving locally.
 
-1. The host chooses **Host Game** and shares the displayed `arena-...` code.
-2. Guests open the same game version, enter that code and choose **Join Game** or press Enter.
-3. Move with **WASD/arrows**, aim with the mouse and fire with the **left mouse button**.
-4. Use **Leave room** to return to the lobby. If the host leaves, guests must create or join another room.
+1. The host chooses **Host Game** and chooses **Copy invite** or shares the displayed `arena-...` code. Clipboard denial reveals a selectable link.
+2. Guests open the same game version, open the invite (which fills the code but does not auto-connect) or enter the code, then choose **Join Game** or press Enter.
+3. The room waits safely while players join. The host chooses **Start wave** when ready.
+4. Move with **WASD/arrows**, aim with the mouse and fire with the **left mouse button**.
+5. The host can **Restart wave** to reset score, enemies and health without reconnecting the group.
+6. Use **Leave room** to return to the lobby. If the host leaves, guests must create or join another room.
 
 Connection failures and disconnections return to a usable lobby. A connection attempt times out after 15 seconds. Repeated clicks do not create multiple peers. Leaving cancels simulation/render timers and invalidates callbacks from the old room before retrying.
 
@@ -34,7 +36,7 @@ node --check game.js
 node --test tests/*.test.cjs
 ```
 
-Tests cover malformed input, focus release, timer/peer cleanup, stale callbacks, double-click prevention, failure/timeout retries and full-room handling using simulated PeerJS events. They do not prove physical-network connectivity, signaling uptime or 16-player performance.
+Tests cover malformed input, focus release, timer/peer cleanup, stale callbacks, double-click prevention, failure/timeout retries and full-room handling, waiting/start/restart, stale death timers and invite clipboard recovery using simulated PeerJS events. They do not prove physical-network connectivity, signaling uptime or 16-player performance.
 
 For a real smoke test, host in one browser and join from a second; verify movement/fire, guest leave/rejoin, host closure and retry. Repeat on the target physical network before claiming connectivity.
 

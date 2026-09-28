@@ -22,19 +22,20 @@
       </div>
 
       <p id="status" role="status">Not connected.</p>
-      <p class="small">
-        Controls: WASD/arrows move · mouse aims · left click shoots · host simulates the match.
-      </p>
+      <details><summary>Controls &amp; connection help</summary><p class="small">WASD/arrows move · mouse aims · left click shoots. The host starts the wave when everyone has joined. Keep the host's tab open. If a connection fails, check the room code and choose Join again.</p></details>
     </section>
 
     <section id="gameWrap" class="hidden">
       <canvas id="game" width="960" height="540" tabindex="0" aria-label="Arena: WASD or arrows to move, mouse to aim, left click to shoot"></canvas>
       <div class="hud">
+        <button id="startBtn" type="button" hidden>Start wave</button>
+        <button id="copyBtn" type="button">Copy invite</button>
         <button id="leaveBtn" type="button">Leave room</button>
         <div id="gameStatus" role="status"></div>
         <div id="roomInfo">Room: —</div>
         <div id="stats">Players: 0 · Enemies: 0 · Score: 0</div>
       </div>
+      <input id="inviteLink" aria-label="Room invite link; select and copy" readonly hidden />
     </section>
   </main>
 

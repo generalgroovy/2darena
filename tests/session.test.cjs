@@ -4,7 +4,7 @@ const vm=require('node:vm');
 const {readFileSync}=require('node:fs');
 const path=require('node:path');
 
-function setup(){
+function setup(options={}){
  const elements=new Map(),peers=[],intervals=new Set(),frames=new Set(),timeouts=new Map();let serial=0;
  class Events {
   constructor(){this.handlers={};this.open=true;this.peer='guest';}
@@ -17,8 +17,8 @@ function setup(){
   destroy(){this.destroyed=true;this.emit('close');}
   connect(){this.conn=new Events();return this.conn;}
  }
- const document={activeElement:null,getElementById(id){if(!elements.has(id))elements.set(id,{value:'arena-test',classList:{add(){},remove(){}},focus(){document.activeElement=this;},addEventListener(){},getContext(){return {};}});return elements.get(id);}};
- const context=vm.createContext({Peer,document,window:{addEventListener(){}},
+ const document={activeElement:null,getElementById(id){if(!elements.has(id))elements.set(id,{value:'arena-test',classList:{add(){},remove(){}},focus(){document.activeElement=this;},select(){this.selected=true;},addEventListener(){},getContext(){return {};}});return elements.get(id);}};
+ const context=vm.createContext({Peer,document,URL,navigator:{clipboard:{writeText:options.writeText||(()=>Promise.resolve())}},window:{location:{href:options.url||"https://example.test/arena/"},addEventListener(){}},
  setInterval(){const id=++serial;intervals.add(id);return id;},clearInterval:id=>intervals.delete(id),
  requestAnimationFrame(){const id=++serial;frames.add(id);return id;},cancelAnimationFrame:id=>frames.delete(id),
  setTimeout(fn){const id=++serial;timeouts.set(id,fn);return id;},clearTimeout:id=>timeouts.delete(id)});
@@ -64,4 +64,38 @@ test('keyboard focus follows successful play and returns to the appropriate lobb
  app.elements.get('joinCode').value='';app.run('joinGame()');
  assert.equal(app.document.activeElement,app.elements.get('joinCode'));
  assert.match(app.elements.get('status').textContent,/Enter a host code/);
+});
+
+test('room waits safely, then starts and restarts without dropping members',()=>{
+ const app=setup();app.run('hostGame()');app.peers[0].emit('open','arena-host');
+ app.run('hostTick()');assert.equal(app.run('world.enemies.length'),0);
+ assert.equal(app.run('snapshot.phase'),'waiting');
+ app.run('world.players.guest=makePlayer("guest","P2");startRound();hostTick()');
+ assert.equal(app.run('snapshot.phase'),'playing');assert.equal(app.run('world.enemies.length'),1);
+ app.run('world.score=700;world.players.guest.health=8;startRound()');
+ assert.equal(app.run('world.score'),0);assert.equal(app.run('world.players.guest.health'),100);
+ assert.equal(app.run('Object.keys(world.players).length'),2);
+ assert.equal(app.peers.length,1);assert.equal(app.peers[0].destroyed,undefined);
+});
+
+test('old death timers cannot respawn players in a restarted round',()=>{
+ const app=setup();app.run('hostGame()');app.peers[0].emit('open','arena-host');
+ app.run('startRound();world.players[myId].health=1;world.enemies=[{x:world.players[myId].x,y:world.players[myId].y,r:17,speed:0,health:1,damage:14}];hostTick()');
+ assert.equal(app.run('world.players[myId].alive'),false);
+ const death=[...app.timeouts.values()].at(-1);
+ app.run('startRound();world.players[myId].health=70');death();
+ assert.equal(app.run('world.players[myId].health'),70);
+});
+
+test('invite is explicit, copy has a selection fallback, and late clipboard results stay in their room',async()=>{
+ const app=setup({url:'https://example.test/arena/?room=arena-friend',writeText:()=>Promise.reject(new Error('denied'))});
+ assert.equal(app.elements.get('joinCode').value,'arena-friend');assert.equal(app.peers.length,0);
+ app.run('hostGame()');app.peers[0].emit('open','arena-host');await app.run('copyInvite()');
+ assert.equal(app.elements.get('inviteLink').value,'https://example.test/arena/?room=arena-host');
+ assert.equal(app.elements.get('inviteLink').selected,true);
+ let reject;const late=setup({writeText:()=>new Promise((_,r)=>{reject=r;})});
+ late.run('hostGame()');late.peers[0].emit('open','arena-late');const pending=late.run('copyInvite()');
+ late.run('stopSession()');reject(new Error('denied'));await pending;
+ assert.equal(late.elements.get('inviteLink').hidden,true);
+ assert.equal(late.elements.get('status').textContent,'Left room.');
 });

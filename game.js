@@ -14,6 +14,8 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const statsEl = document.getElementById("stats");
 const roomInfoEl = document.getElementById("roomInfo");
+const startBtn = document.getElementById("startBtn");
+const inviteLink = document.getElementById("inviteLink");
 
 const colors = ["#6ee7b7","#93c5fd","#fca5a5","#fcd34d","#c4b5fd","#fdba74","#67e8f9","#f9a8d4","#bef264","#ddd6fe","#a7f3d0","#fecaca","#bfdbfe","#fde68a","#e9d5ff","#ccfbf1"];
 
@@ -34,9 +36,11 @@ let sessionTimers = [];
 let animationFrame = null;
 let connectionTimeout = null;
 let lobbyReturnFocus = hostBtn;
+let round = 0;
 
 function stopSession(message = "Left room.", restoreFocus = true) {
   session += 1; // Invalidate late callbacks before closing their connections.
+  round += 1;
   const previousPeer = peer;
   peer = null;
   hostConn = null;
@@ -60,6 +64,7 @@ function stopSession(message = "Left room.", restoreFocus = true) {
   joinBtn.disabled = false;
   lobby.classList.remove("hidden");
   gameWrap.classList.add("hidden");
+  inviteLink.hidden = true;
   setStatus(message);
   if (restoreFocus) lobbyReturnFocus.focus();
 }
@@ -114,11 +119,47 @@ function showGame(roomCode) {
   lobby.classList.add("hidden");
   gameWrap.classList.remove("hidden");
   roomInfoEl.textContent = `Room: ${roomCode}${isHost ? " · hosting" : ""}`;
+  startBtn.hidden = !isHost;
+  startBtn.textContent = "Start wave";
   canvas.focus();
 }
 
 function initWorld() {
-  world = { players: {}, bullets: [], enemies: [], particles: [], score: 0, wave: 1, spawnTimer: 0 };
+  world = { phase: "waiting", players: {}, bullets: [], enemies: [], particles: [], score: 0, wave: 1, spawnTimer: 0 };
+}
+
+function startRound() {
+  if (!isHost || !world) return;
+  round += 1;
+  for (const p of Object.values(world.players)) Object.assign(p, makePlayer(p.id, p.name), {color:p.color});
+  Object.assign(world, {phase:"playing", bullets:[], enemies:[], particles:[], score:0, wave:1, spawnTimer:0});
+  keys.clear();
+  mouse.down = false;
+  startBtn.textContent = "Restart wave";
+  snapshot = compressWorld(world);
+  broadcastSnapshot();
+  setStatus("Wave started.");
+  canvas.focus();
+}
+
+async function copyInvite() {
+  if (!hostId) return;
+  const token = session;
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", hostId);
+  url.hash = "";
+  const value = url.href;
+  try {
+    await navigator.clipboard.writeText(value);
+    if (session === token) setStatus("Invite copied.");
+  } catch {
+    if (session !== token) return;
+    inviteLink.value = value;
+    inviteLink.hidden = false;
+    inviteLink.focus();
+    inviteLink.select();
+    setStatus("Copy the selected invite link.");
+  }
 }
 
 function makePlayer(id, name) {
@@ -146,10 +187,12 @@ function hostGame() {
     if (session !== token) return;
     clearTimeout(connectionTimeout);
     myId = id;
+    hostId = id;
     initWorld();
     world.players[myId] = makePlayer(myId, "Host");
     showGame(id);
-    setStatus(`Hosting as ${id}`);
+    setStatus("Room open. Invite friends, then Start wave.");
+    snapshot = compressWorld(world);
     sessionTimers = [setInterval(hostTick, 1000 / TICK_RATE), setInterval(broadcastSnapshot, 1000 / SNAPSHOT_RATE)];
     animationFrame = requestAnimationFrame(drawLoop);
   });
@@ -165,6 +208,8 @@ function hostGame() {
       conns.set(conn.peer, conn);
       world.players[conn.peer] = makePlayer(conn.peer, `P${Object.keys(world.players).length + 1}`);
       conn.send({ type: "welcome", id: conn.peer, hostId, maxPlayers: MAX_PLAYERS });
+      snapshot = compressWorld(world);
+      broadcastSnapshot();
     });
     conn.on("data", msg => {
       if (session !== token || conns.get(conn.peer) !== conn || !msg || typeof msg !== "object") return;
@@ -196,12 +241,15 @@ function joinGame() {
       if (session !== token) return;
       clearTimeout(connectionTimeout);
       showGame(code);
-      setStatus(`Connected to ${code}`);
+      setStatus("Connected. Waiting for the host to start.");
       animationFrame = requestAnimationFrame(clientLoop);
     });
     conn.on("data", msg => {
       if (session !== token || !msg || typeof msg !== "object") return;
-      if (msg.type === "snapshot" && msg.snapshot?.players && Array.isArray(msg.snapshot.bullets) && Array.isArray(msg.snapshot.enemies) && Array.isArray(msg.snapshot.particles)) snapshot = msg.snapshot;
+      if (msg.type === "snapshot" && msg.snapshot?.players && Array.isArray(msg.snapshot.bullets) && Array.isArray(msg.snapshot.enemies) && Array.isArray(msg.snapshot.particles)) {
+        if (snapshot.phase !== msg.snapshot.phase) setStatus(msg.snapshot.phase === "waiting" ? "Waiting for the host to start." : "Wave in progress.");
+        snapshot = msg.snapshot;
+      }
       if (msg.type === "full") stopSession("Room is full. Try another room.");
     });
     conn.on("close", () => { if (session === token) stopSession("Disconnected from host. You can join again."); });
@@ -224,6 +272,7 @@ function localInput() {
 function hostTick() {
   const dt = 1 / TICK_RATE;
   if (!world) return;
+  if (world.phase === "waiting") { snapshot = compressWorld(world); return; }
 
   world.players[myId].input = localInput();
 
@@ -291,7 +340,8 @@ function hostTick() {
       burst(e.x, e.y, 8);
       if (target.health <= 0) {
         target.alive = false;
-        setTimeout(() => respawnPlayer(target.id), 2500);
+        const token = session, currentRound = round;
+        setTimeout(() => { if (session === token && round === currentRound) respawnPlayer(target.id); }, 2500);
       }
     }
   }
@@ -374,6 +424,7 @@ function broadcastSnapshot() {
 
 function compressWorld(w) {
   return {
+    phase: w.phase,
     players: w.players,
     bullets: w.bullets.map(b => ({ x: b.x, y: b.y, r: b.r })),
     enemies: w.enemies.map(e => ({ x: e.x, y: e.y, r: e.r })),
@@ -455,6 +506,15 @@ function drawSnapshot(s) {
   ctx.globalAlpha = 1;
 
   statsEl.textContent = `Players: ${players.length}/${MAX_PLAYERS} · Enemies: ${(s.enemies || []).length} · Score: ${s.score || 0} · Wave: ${s.wave || 1}`;
+  const me = s.players?.[myId];
+  if (s.phase === "waiting" || me?.alive === false) {
+    ctx.fillStyle = "rgba(8,17,31,.88)";
+    ctx.fillRect(170, H / 2 - 32, W - 340, 64);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "22px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText(me?.alive === false ? "Respawning…" : isHost ? "Ready? Start wave below." : "Waiting for host", W / 2, H / 2 + 8);
+  }
 }
 
 function drawGrid() {
@@ -477,7 +537,7 @@ function clamp(v, min, max) {
 }
 
 window.addEventListener("keydown", e => {
-  if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName)) return;
+  if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SUMMARY"].includes(e.target?.tagName)) return;
   if (e.key.startsWith("Arrow")) e.preventDefault();
   keys.add(e.key.toLowerCase());
 });
@@ -503,3 +563,12 @@ joinCodeEl.addEventListener("keydown", e => {
 });
 
 document.getElementById("leaveBtn").addEventListener("click", () => stopSession());
+startBtn.addEventListener("click", startRound);
+document.getElementById("copyBtn").addEventListener("click", copyInvite);
+if (window.location?.href) {
+  const room = new URL(window.location.href).searchParams.get("room");
+  if (room && /^arena-[a-z0-9]{1,32}$/.test(room)) {
+    joinCodeEl.value = room;
+    setStatus("Invite ready. Choose Join Game.");
+  }
+}
