@@ -4,7 +4,7 @@ const vm=require('node:vm');
 const {readFileSync}=require('node:fs');
 function setup(){
   const events={},elements=new Map(),canvasEvents={};
-  const context=vm.createContext({document:{getElementById(id){if(!elements.has(id))elements.set(id,{focus(){},addEventListener(name,fn){if(id==='game')canvasEvents[name]=fn;},getContext(){return {};}});return elements.get(id);}},window:{addEventListener(name,fn){events[name]=fn;}},Math,Number,Map,Set});
+  const context=vm.createContext({ArenaModel:require("../arena-model.js"),document:{getElementById(id){if(!elements.has(id))elements.set(id,{focus(){},setPointerCapture(){},width:960,height:540,getBoundingClientRect(){return {left:0,top:0,width:960,height:540};},addEventListener(name,fn){if(id==='game')canvasEvents[name]=fn;},getContext(){return {};}});return elements.get(id);}},window:{addEventListener(name,fn){events[name]=fn;}},Math,Number,Map,Set});
   vm.runInContext(readFileSync(require('node:path').join(__dirname,'..','game.js'),'utf8'),context);
   return {events,elements,canvasEvents,run:code=>vm.runInContext(code,context)};
 }
@@ -34,7 +34,7 @@ test('connection state remains visible while lobby is hidden',()=>{
 
 test('only the primary mouse button fires',()=>{
   const app=setup();
-  app.canvasEvents.mousedown({button:2});assert.equal(app.run('localInput().shoot'),false);
-  app.canvasEvents.mousedown({button:0});assert.equal(app.run('localInput().shoot'),true);
-  app.events.mouseup();assert.equal(app.run('localInput().shoot'),false);
+  app.canvasEvents.pointerdown({button:2,pointerId:1});assert.equal(app.run('localInput().shoot'),false);
+  app.canvasEvents.pointerdown({button:0,pointerId:1,clientX:400,clientY:300,preventDefault(){}});assert.equal(app.run('localInput().shoot'),true);
+  app.events.pointerup({pointerId:1});assert.equal(app.run('localInput().shoot'),false);
 });

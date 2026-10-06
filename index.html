@@ -9,11 +9,12 @@
 <body>
   <main>
     <section id="lobby" class="panel">
-      <h1>Peer-Hosted Arena Shooter</h1>
-      <p>Host a room and share its code, or join a friend.</p>
+      <h1>Arena</h1>
+      <p>Move. Aim. Survive together.</p>
 
       <div class="row">
-        <button id="hostBtn">Host Game</button>
+        <button id="soloBtn" type="button">Play solo</button>
+        <button id="hostBtn" type="button" class="secondary">Host Game</button>
       </div>
 
       <div class="join">
@@ -22,11 +23,33 @@
       </div>
 
       <p id="status" role="status">Not connected.</p>
-      <details><summary>Controls &amp; connection help</summary><p class="small">WASD/arrows move · mouse aims · left click shoots. The host starts the wave when everyone has joined. Keep the host's tab open. If a connection fails, check the room code and choose Join again.</p></details>
+      <p class="small">Solo starts instantly. Host a room to invite friends.</p>
+      <details><summary>How to play</summary>
+        <p><strong>Move</strong> with WASD/arrows. <strong>Aim &amp; fire</strong> by holding on the arena, or hold F to fire toward the nearest enemy.</p>
+        <p><strong>Dash</strong> with Space/Shift to move through danger. <strong>Pulse</strong> with Q to pierce up to four enemies. Release, then press again when ready.</p>
+        <p>Yellow diamonds show their charge direction before they rush. Step aside or dash across it, then attack while they recover. Health returns after a short respawn; restart to try for a cleaner run.</p>
+        <p>On touch screens, use the movement pad while holding the arena to aim and fire. Dash and Pulse are below it. Landscape gives you a larger view.</p>
+      </details>
+      <details><summary>Connection help</summary><p>Share the host's invite, then Start wave when everyone has joined. Keep the host's tab open. If joining fails, check the room code and try again. Multiplayer needs internet signaling; solo does not.</p></details>
     </section>
 
     <section id="gameWrap" class="hidden">
-      <canvas id="game" width="960" height="540" tabindex="0" aria-label="Arena: WASD or arrows to move, mouse to aim, left click to shoot"></canvas>
+      <div class="play-status"><strong id="health">Health 100/100</strong><span>Move: WASD / arrows · Hold arena to fire</span></div>
+      <canvas id="game" width="960" height="540" tabindex="0" aria-label="Arena: WASD or arrows move, hold F for assisted fire, Space dashes, Q fires a piercing pulse. Mouse or touch aims and fires."></canvas>
+      <div class="combat-controls">
+        <div class="move-pad" aria-label="Touch movement">
+          <button id="move-w" type="button" aria-label="Move up">↑</button>
+          <button id="move-a" type="button" aria-label="Move left">←</button>
+          <button id="move-s" type="button" aria-label="Move down">↓</button>
+          <button id="move-d" type="button" aria-label="Move right">→</button>
+        </div>
+        <div class="abilities">
+          <button id="dashBtn" type="button" aria-describedby="dashHelp">Dash · Space</button>
+          <span id="dashHelp">Through danger</span>
+          <button id="pulseBtn" type="button" aria-describedby="pulseHelp">Pulse · Q</button>
+          <span id="pulseHelp">Through a group</span>
+        </div>
+      </div>
       <div class="hud">
         <button id="startBtn" type="button" hidden>Start wave</button>
         <button id="copyBtn" type="button">Copy invite</button>
@@ -39,7 +62,8 @@
     </section>
   </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
+  <script async src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js"></script>
+  <script src="arena-model.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

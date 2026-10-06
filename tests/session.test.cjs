@@ -18,7 +18,7 @@ function setup(options={}){
   connect(){this.conn=new Events();return this.conn;}
  }
  const document={activeElement:null,getElementById(id){if(!elements.has(id))elements.set(id,{value:'arena-test',classList:{add(){},remove(){}},focus(){document.activeElement=this;},select(){this.selected=true;},addEventListener(){},getContext(){return {};}});return elements.get(id);}};
- const context=vm.createContext({Peer,document,URL,navigator:{clipboard:{writeText:options.writeText||(()=>Promise.resolve())}},window:{location:{href:options.url||"https://example.test/arena/"},addEventListener(){}},
+ const context=vm.createContext({ArenaModel:require("../arena-model.js"),Peer,document,URL,navigator:{clipboard:{writeText:options.writeText||(()=>Promise.resolve())}},window:{location:{href:options.url||"https://example.test/arena/"},addEventListener(){}},
  setInterval(){const id=++serial;intervals.add(id);return id;},clearInterval:id=>intervals.delete(id),
  requestAnimationFrame(){const id=++serial;frames.add(id);return id;},cancelAnimationFrame:id=>frames.delete(id),
  setTimeout(fn){const id=++serial;timeouts.set(id,fn);return id;},clearTimeout:id=>timeouts.delete(id)});
@@ -78,12 +78,12 @@ test('room waits safely, then starts and restarts without dropping members',()=>
  assert.equal(app.peers.length,1);assert.equal(app.peers[0].destroyed,undefined);
 });
 
-test('old death timers cannot respawn players in a restarted round',()=>{
+test('death countdown is reset on restart and does not schedule stale timers',()=>{
  const app=setup();app.run('hostGame()');app.peers[0].emit('open','arena-host');
  app.run('startRound();world.players[myId].health=1;world.enemies=[{x:world.players[myId].x,y:world.players[myId].y,r:17,speed:0,health:1,damage:14}];hostTick()');
  assert.equal(app.run('world.players[myId].alive'),false);
- const death=[...app.timeouts.values()].at(-1);
- app.run('startRound();world.players[myId].health=70');death();
+ assert.equal(app.timeouts.size,0);
+ app.run('startRound();world.players[myId].health=70;world.spawnTimer=100;for(let i=0;i<90;i++)hostTick()');
  assert.equal(app.run('world.players[myId].health'),70);
 });
 
@@ -98,4 +98,30 @@ test('invite is explicit, copy has a selection fallback, and late clipboard resu
  late.run('stopSession()');reject(new Error('denied'));await pending;
  assert.equal(late.elements.get('inviteLink').hidden,true);
  assert.equal(late.elements.get('status').textContent,'Left room.');
+});
+
+test('solo does not need PeerJS and stale network callbacks cannot replace it',()=>{
+ const app=setup();app.run('hostGame()');const old=app.peers[0];old.emit('open','arena-old');
+ app.run('stopSession();Peer=undefined;soloGame();keys.add("d");hostTick()');
+ assert.equal(app.run('isSolo'),true);assert.equal(app.run('world.phase'),'playing');
+ assert.equal(app.run('myId'),'solo');assert.equal(app.intervals.size,1);assert.equal(app.peers.length,1);
+ old.emit('open','stale');old.emit('error',{type:'late'});
+ assert.equal(app.run('myId'),'solo');assert.equal(app.run('world.phase'),'playing');
+ app.run('stopSession()');assert.equal(app.intervals.size,0);assert.equal(app.frames.size,0);assert.equal(app.elements.get('soloBtn').disabled,false);
+ assert.equal(app.document.activeElement,app.elements.get('soloBtn'));
+});
+
+test('solo can cancel an unfinished connection without waiting for the timeout',()=>{
+ const app=setup();app.run('hostGame()');const old=app.peers[0];
+ assert.equal(app.elements.get('soloBtn').disabled,false);app.run('soloGame()');
+ assert.equal(old.destroyed,true);assert.equal(app.timeouts.size,0);assert.equal(app.run('myId'),'solo');
+ old.emit('open','arena-late');assert.equal(app.run('myId'),'solo');assert.equal(app.intervals.size,1);
+});
+
+test('guest snapshots reject malformed render geometry without replacing usable state',()=>{
+ const app=setup();app.run('joinGame()');app.peers[0].emit('open','me');const conn=app.peers[0].conn;
+ const M=require('../arena-model.js');const w=M.createWorld();w.players.me=M.makePlayer('me','You');M.startRound(w);
+ conn.emit('data',{type:'snapshot',snapshot:M.snapshot(w)});assert.equal(app.run('snapshot.phase'),'playing');
+ const bad=M.snapshot(w);bad.players.me.r=-4;bad.score=999;
+ conn.emit('data',{type:'snapshot',snapshot:bad});assert.equal(app.run('snapshot.score'),0);assert.equal(app.run('snapshot.players.me.r'),14);
 });

@@ -1,4 +1,4 @@
-const MAX_PLAYERS = 16;
+const MAX_PLAYERS = ArenaModel.MAX_PLAYERS;
 const TICK_RATE = 30;
 const SNAPSHOT_RATE = 20;
 const W = 960;
@@ -8,6 +8,9 @@ const lobby = document.getElementById("lobby");
 const gameWrap = document.getElementById("gameWrap");
 const statusEl = document.getElementById("status");
 const hostBtn = document.getElementById("hostBtn");
+const soloBtn = document.getElementById("soloBtn");
+const dashBtn = document.getElementById("dashBtn");
+const pulseBtn = document.getElementById("pulseBtn");
 const joinBtn = document.getElementById("joinBtn");
 const joinCodeEl = document.getElementById("joinCode");
 const canvas = document.getElementById("game");
@@ -17,10 +20,9 @@ const roomInfoEl = document.getElementById("roomInfo");
 const startBtn = document.getElementById("startBtn");
 const inviteLink = document.getElementById("inviteLink");
 
-const colors = ["#6ee7b7","#93c5fd","#fca5a5","#fcd34d","#c4b5fd","#fdba74","#67e8f9","#f9a8d4","#bef264","#ddd6fe","#a7f3d0","#fecaca","#bfdbfe","#fde68a","#e9d5ff","#ccfbf1"];
-
 let peer = null;
 let isHost = false;
+let isSolo = false;
 let myId = null;
 let hostId = null;
 let conns = new Map();
@@ -36,21 +38,24 @@ let sessionTimers = [];
 let animationFrame = null;
 let connectionTimeout = null;
 let lobbyReturnFocus = hostBtn;
-let round = 0;
+const touchKeys = new Set();
+const touchActions = { dash: false, pulse: false };
+const pendingActions = { dash: false, pulse: false };
+const controlResets = [];
+let aimPointer = null;
 
 function stopSession(message = "Left room.", restoreFocus = true) {
   session += 1; // Invalidate late callbacks before closing their connections.
-  round += 1;
   const previousPeer = peer;
   peer = null;
   hostConn = null;
   conns.clear();
   world = null;
   isHost = false;
+  isSolo = false;
   myId = null;
   hostId = null;
-  keys.clear();
-  mouse.down = false;
+  releaseControls();
   lastSendInput = 0;
   snapshot = { players: {}, bullets: [], enemies: [], particles: [], score: 0, wave: 1 };
   for (const timer of sessionTimers) clearInterval(timer);
@@ -60,6 +65,7 @@ function stopSession(message = "Left room.", restoreFocus = true) {
   if (animationFrame !== null) cancelAnimationFrame(animationFrame);
   animationFrame = null;
   if (previousPeer) previousPeer.destroy();
+  soloBtn.disabled = false;
   hostBtn.disabled = false;
   joinBtn.disabled = false;
   lobby.classList.remove("hidden");
@@ -105,40 +111,47 @@ function setStatus(text) {
 }
 
 function sanitizeInput(input) {
-  const value = input && typeof input === "object" ? input : {};
-  return {
-    up: value.up === true, down: value.down === true,
-    left: value.left === true, right: value.right === true,
-    shoot: value.shoot === true,
-    mx: Number.isFinite(value.mx) ? clamp(value.mx, 0, W) : W / 2,
-    my: Number.isFinite(value.my) ? clamp(value.my, 0, H) : H / 2
-  };
+  return ArenaModel.sanitizeInput(input);
+}
+
+function soloGame() {
+  if (soloBtn.disabled) return;
+  stopSession("Solo practice.", false);
+  lobbyReturnFocus = soloBtn;
+  isHost = true;
+  isSolo = true;
+  myId = "solo";
+  initWorld();
+  world.players[myId] = makePlayer(myId, "You");
+  showGame("Solo");
+  startRound();
+  sessionTimers = [setInterval(hostTick, 1000 / TICK_RATE)];
+  animationFrame = requestAnimationFrame(drawLoop);
 }
 
 function showGame(roomCode) {
   lobby.classList.add("hidden");
   gameWrap.classList.remove("hidden");
-  roomInfoEl.textContent = `Room: ${roomCode}${isHost ? " · hosting" : ""}`;
+  roomInfoEl.textContent = isSolo ? "Solo · no connection needed" : `Room: ${roomCode}${isHost ? " · hosting" : ""}`;
+  document.getElementById("copyBtn").hidden = isSolo;
+  document.getElementById("leaveBtn").textContent = isSolo ? "Back to menu" : "Leave room";
   startBtn.hidden = !isHost;
   startBtn.textContent = "Start wave";
   canvas.focus();
 }
 
 function initWorld() {
-  world = { phase: "waiting", players: {}, bullets: [], enemies: [], particles: [], score: 0, wave: 1, spawnTimer: 0 };
+  world = ArenaModel.createWorld();
 }
 
 function startRound() {
   if (!isHost || !world) return;
-  round += 1;
-  for (const p of Object.values(world.players)) Object.assign(p, makePlayer(p.id, p.name), {color:p.color});
-  Object.assign(world, {phase:"playing", bullets:[], enemies:[], particles:[], score:0, wave:1, spawnTimer:0});
-  keys.clear();
-  mouse.down = false;
+  ArenaModel.startRound(world);
+  releaseControls();
   startBtn.textContent = "Restart wave";
   snapshot = compressWorld(world);
   broadcastSnapshot();
-  setStatus("Wave started.");
+  setStatus("Move, aim and hold to fire. Dash through danger; pulse through a line of enemies.");
   canvas.focus();
 }
 
@@ -163,19 +176,7 @@ async function copyInvite() {
 }
 
 function makePlayer(id, name) {
-  const n = Object.keys(world.players).length;
-  return {
-    id, name,
-    x: 160 + Math.random() * (W - 320),
-    y: 120 + Math.random() * (H - 240),
-    r: 14,
-    speed: 250,
-    health: 100,
-    fireCooldown: 0,
-    input: { up: false, down: false, left: false, right: false, mx: W / 2, my: H / 2, shoot: false },
-    color: colors[n % colors.length],
-    alive: true
-  };
+  return ArenaModel.makePlayer(id, name, Object.keys(world.players).length);
 }
 
 function hostGame() {
@@ -200,6 +201,7 @@ function hostGame() {
     if (session !== token) { conn.close(); return; }
     conn.on("open", () => {
       if (session !== token || !world) { conn.close(); return; }
+      if (conn.peer === myId || conns.has(conn.peer) || ["__proto__", "constructor", "prototype"].includes(conn.peer)) { conn.close(); return; }
       if (Object.keys(world.players).length >= MAX_PLAYERS) {
         conn.send({ type: "full" });
         conn.close();
@@ -213,7 +215,10 @@ function hostGame() {
     });
     conn.on("data", msg => {
       if (session !== token || conns.get(conn.peer) !== conn || !msg || typeof msg !== "object") return;
-      if (msg.type === "input" && world?.players[conn.peer]) world.players[conn.peer].input = sanitizeInput(msg.input);
+      if (msg.type === "input" && world?.players[conn.peer]) {
+        world.players[conn.peer].input = sanitizeInput(msg.input);
+        world.players[conn.peer].inputAge = 0;
+      }
     });
     const removeGuest = () => {
       if (session !== token || conns.get(conn.peer) !== conn) return;
@@ -228,7 +233,7 @@ function hostGame() {
 function joinGame() {
   if (joinBtn.disabled) return;
   const code = joinCodeEl.value.trim();
-  if (!code) { setStatus("Enter a host code."); joinCodeEl.focus(); return; }
+  if (!/^arena-[a-z0-9]{1,32}$/.test(code)) { setStatus(code ? "Use the arena- room code from your invite." : "Enter a host code."); joinCodeEl.focus(); return; }
   const started = beginSession(false, code);
   if (!started) return;
   const { token, currentPeer } = started;
@@ -246,9 +251,11 @@ function joinGame() {
     });
     conn.on("data", msg => {
       if (session !== token || !msg || typeof msg !== "object") return;
-      if (msg.type === "snapshot" && msg.snapshot?.players && Array.isArray(msg.snapshot.bullets) && Array.isArray(msg.snapshot.enemies) && Array.isArray(msg.snapshot.particles)) {
-        if (snapshot.phase !== msg.snapshot.phase) setStatus(msg.snapshot.phase === "waiting" ? "Waiting for the host to start." : "Wave in progress.");
-        snapshot = msg.snapshot;
+      if (msg.type === "snapshot") {
+        const next = ArenaModel.validateSnapshot(msg.snapshot);
+        if (!next) return;
+        if (snapshot.phase !== next.phase) setStatus(next.phase === "waiting" ? "Waiting for the host to start." : "Wave in progress. Dash through danger; pulse through groups.");
+        snapshot = next;
       }
       if (msg.type === "full") stopSession("Room is full. Try another room.");
     });
@@ -258,157 +265,32 @@ function joinGame() {
 }
 
 function localInput() {
-  return {
-    up: keys.has("w") || keys.has("arrowup"),
-    down: keys.has("s") || keys.has("arrowdown"),
-    left: keys.has("a") || keys.has("arrowleft"),
-    right: keys.has("d") || keys.has("arrowright"),
-    mx: mouse.x,
-    my: mouse.y,
-    shoot: mouse.down
+  const held = key => keys.has(key) || touchKeys.has(key);
+  let mx = mouse.x, my = mouse.y;
+  const me = snapshot.players?.[myId];
+  if (held("f") && me && snapshot.enemies.length) {
+    const target = snapshot.enemies.reduce((best, e) => distance(e, me) < distance(best, me) ? e : best);
+    mx = target.x; my = target.y;
+  }
+  const input = {
+    up: held("w") || held("arrowup"), down: held("s") || held("arrowdown"),
+    left: held("a") || held("arrowleft"), right: held("d") || held("arrowright"),
+    mx, my, shoot: mouse.down || held("f"),
+    dash: held(" ") || held("shift") || touchActions.dash || pendingActions.dash,
+    pulse: held("q") || touchActions.pulse || pendingActions.pulse
   };
+  pendingActions.dash = false; pendingActions.pulse = false;
+  return input;
 }
 
 function hostTick() {
-  const dt = 1 / TICK_RATE;
   if (!world) return;
-  if (world.phase === "waiting") { snapshot = compressWorld(world); return; }
-
-  world.players[myId].input = localInput();
-
-  for (const p of Object.values(world.players)) {
-    if (!p.alive) continue;
-
-    let dx = 0, dy = 0;
-    if (p.input.up) dy--;
-    if (p.input.down) dy++;
-    if (p.input.left) dx--;
-    if (p.input.right) dx++;
-
-    const len = Math.hypot(dx, dy) || 1;
-    p.x = clamp(p.x + dx / len * p.speed * dt, p.r, W - p.r);
-    p.y = clamp(p.y + dy / len * p.speed * dt, p.r, H - p.r);
-    p.fireCooldown -= dt;
-
-    if (p.input.shoot && p.fireCooldown <= 0) {
-      const a = Math.atan2(p.input.my - p.y, p.input.mx - p.x);
-      world.bullets.push({
-        owner: p.id,
-        x: p.x + Math.cos(a) * 20,
-        y: p.y + Math.sin(a) * 20,
-        vx: Math.cos(a) * 620,
-        vy: Math.sin(a) * 620,
-        r: 4,
-        life: 0.9
-      });
-      p.fireCooldown = 0.16;
-    }
+  if (world.players[myId]) {
+    world.players[myId].input = localInput();
+    world.players[myId].inputAge = 0;
   }
-
-  world.spawnTimer -= dt;
-  if (world.spawnTimer <= 0) {
-    spawnEnemy();
-    world.spawnTimer = Math.max(0.16, 0.95 - world.wave * 0.04 - Object.keys(world.players).length * 0.015);
-  }
-
-  world.wave = 1 + Math.floor(world.score / 250);
-
-  for (const b of world.bullets) {
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
-    b.life -= dt;
-  }
-
-  for (const e of world.enemies) {
-    const living = Object.values(world.players).filter(p => p.alive);
-    if (!living.length) continue;
-
-    let target = living[0];
-    let best = distance(e, target);
-    for (const p of living) {
-      const d = distance(e, p);
-      if (d < best) { best = d; target = p; }
-    }
-
-    const a = Math.atan2(target.y - e.y, target.x - e.x);
-    e.x += Math.cos(a) * e.speed * dt;
-    e.y += Math.sin(a) * e.speed * dt;
-
-    if (distance(e, target) < e.r + target.r) {
-      target.health -= e.damage;
-      e.health = 0;
-      burst(e.x, e.y, 8);
-      if (target.health <= 0) {
-        target.alive = false;
-        const token = session, currentRound = round;
-        setTimeout(() => { if (session === token && round === currentRound) respawnPlayer(target.id); }, 2500);
-      }
-    }
-  }
-
-  for (const b of world.bullets) {
-    for (const e of world.enemies) {
-      if (e.health > 0 && distance(b, e) < b.r + e.r) {
-        e.health--;
-        b.life = 0;
-        burst(e.x, e.y, 5);
-        if (e.health <= 0) {
-          world.score += e.r < 13 ? 20 : 10;
-          burst(e.x, e.y, 12);
-        }
-        break;
-      }
-    }
-  }
-
-  for (const p of world.particles) {
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vx *= 0.94;
-    p.vy *= 0.94;
-    p.life -= dt;
-  }
-
-  world.bullets = world.bullets.filter(b => b.life > 0 && b.x > -30 && b.x < W + 30 && b.y > -30 && b.y < H + 30);
-  world.enemies = world.enemies.filter(e => e.health > 0);
-  world.particles = world.particles.filter(p => p.life > 0);
-
+  ArenaModel.step(world, 1 / TICK_RATE);
   snapshot = compressWorld(world);
-}
-
-function respawnPlayer(id) {
-  if (!world?.players?.[id]) return;
-  const p = world.players[id];
-  p.x = 160 + Math.random() * (W - 320);
-  p.y = 120 + Math.random() * (H - 240);
-  p.health = 100;
-  p.alive = true;
-}
-
-function spawnEnemy() {
-  const side = Math.floor(Math.random() * 4);
-  let x, y;
-  if (side === 0) { x = Math.random() * W; y = -25; }
-  if (side === 1) { x = W + 25; y = Math.random() * H; }
-  if (side === 2) { x = Math.random() * W; y = H + 25; }
-  if (side === 3) { x = -25; y = Math.random() * H; }
-
-  const fast = Math.random() < Math.min(0.35, world.wave * 0.035);
-  world.enemies.push({
-    x, y,
-    r: fast ? 11 : 17,
-    speed: fast ? 115 + world.wave * 7 : 65 + world.wave * 5,
-    health: fast ? 1 : 3,
-    damage: fast ? 8 : 14
-  });
-}
-
-function burst(x, y, count) {
-  for (let i = 0; i < count; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const s = 50 + Math.random() * 170;
-    world.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.25 + Math.random() * 0.25 });
-  }
 }
 
 function broadcast(msg) {
@@ -423,15 +305,7 @@ function broadcastSnapshot() {
 }
 
 function compressWorld(w) {
-  return {
-    phase: w.phase,
-    players: w.players,
-    bullets: w.bullets.map(b => ({ x: b.x, y: b.y, r: b.r })),
-    enemies: w.enemies.map(e => ({ x: e.x, y: e.y, r: e.r })),
-    particles: w.particles.map(p => ({ x: p.x, y: p.y, life: p.life })),
-    score: w.score,
-    wave: w.wave
-  };
+  return ArenaModel.snapshot(w);
 }
 
 function clientLoop(now) {
@@ -445,7 +319,7 @@ function clientLoop(now) {
 }
 
 function drawLoop() {
-  if (!peer || !isHost) return;
+  if ((!peer && !isSolo) || !isHost) return;
   drawSnapshot(snapshot);
   animationFrame = requestAnimationFrame(drawLoop);
 }
@@ -464,17 +338,31 @@ function drawSnapshot(s) {
   ctx.globalAlpha = 1;
 
   for (const b of s.bullets || []) {
-    ctx.fillStyle = "#8be9fd";
+    ctx.fillStyle = b.pulse ? "#e9d5ff" : "#8be9fd";
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
     ctx.fill();
   }
 
   for (const e of s.enemies || []) {
-    ctx.fillStyle = e.r < 13 ? "#ff7b7b" : "#ff4d6d";
+    if (e.kind === "charger" && (e.phase === "aim" || e.phase === "charge")) {
+      ctx.strokeStyle = e.phase === "aim" ? "#fcd34d" : "#fb923c";
+      ctx.lineWidth = e.phase === "aim" ? 3 : 6;
+      ctx.setLineDash(e.phase === "aim" ? [10, 8] : []);
+      ctx.beginPath(); ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.x + Math.cos(e.angle) * 280, e.y + Math.sin(e.angle) * 280); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.fillStyle = e.kind === "charger" ? "#fbbf24" : e.r < 13 ? "#ff7b7b" : "#ff4d6d";
     ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+    if (e.kind === "charger") {
+      ctx.moveTo(e.x, e.y - e.r); ctx.lineTo(e.x + e.r, e.y); ctx.lineTo(e.x, e.y + e.r); ctx.lineTo(e.x - e.r, e.y); ctx.closePath();
+    } else ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
     ctx.fill();
+    if (e.kind === "charger") {
+      ctx.fillStyle = "#111822";
+      for (let i = 0; i < e.health; i++) ctx.fillRect(e.x - 9 + i * 5, e.y - 2, 3, 4);
+    }
   }
 
   const players = Object.values(s.players || {});
@@ -485,6 +373,9 @@ function drawSnapshot(s) {
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
 
+    if (p.invulnerable > 0) {
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 6, 0, Math.PI * 2); ctx.stroke();
+    }
     const a = Math.atan2((p.input?.my ?? p.y) - p.y, (p.input?.mx ?? p.x) - p.x);
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 4;
@@ -507,6 +398,15 @@ function drawSnapshot(s) {
 
   statsEl.textContent = `Players: ${players.length}/${MAX_PLAYERS} · Enemies: ${(s.enemies || []).length} · Score: ${s.score || 0} · Wave: ${s.wave || 1}`;
   const me = s.players?.[myId];
+  const active = s.phase === "playing" && me?.alive;
+  for (const [button, label, cooldown, key] of [[dashBtn, "Dash", me?.dashCooldown, "Space"], [pulseBtn, "Pulse", me?.pulseCooldown, "Q"]]) {
+    const text = `${label} · ${cooldown > 0 ? cooldown.toFixed(1) + "s" : key}`;
+    if (button.textContent !== text) button.textContent = text;
+    button.setAttribute("aria-disabled", String(!active || cooldown > 0));
+  }
+  const health = document.getElementById("health");
+  const healthText = me ? me.alive ? `Health ${Math.ceil(me.health)}/100` : "Respawning…" : "Connecting…";
+  if (health.textContent !== healthText) health.textContent = healthText;
   if (s.phase === "waiting" || me?.alive === false) {
     ctx.fillStyle = "rgba(8,17,31,.88)";
     ctx.fillRect(170, H / 2 - 32, W - 340, 64);
@@ -536,26 +436,60 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+function releaseControls() {
+  for (const reset of controlResets) reset();
+  keys.clear(); touchKeys.clear(); mouse.down = false;
+  touchActions.dash = false; touchActions.pulse = false; aimPointer = null;
+  pendingActions.dash = false; pendingActions.pulse = false;
+}
+
 window.addEventListener("keydown", e => {
   if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SUMMARY"].includes(e.target?.tagName)) return;
-  if (e.key.startsWith("Arrow")) e.preventDefault();
+  if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+  if (!e.repeat && [" ", "Shift"].includes(e.key)) pendingActions.dash = true;
+  if (!e.repeat && e.key.toLowerCase() === "q") pendingActions.pulse = true;
   keys.add(e.key.toLowerCase());
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
-window.addEventListener("blur", () => { keys.clear(); mouse.down = false; });
+window.addEventListener("blur", releaseControls);
+document.addEventListener?.("visibilitychange", () => { if (document.hidden) releaseControls(); });
 
-canvas.addEventListener("mousemove", e => {
+function aimAt(e) {
   const rect = canvas.getBoundingClientRect();
-  mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
-  mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  mouse.x = clamp((e.clientX - rect.left) * (canvas.width / rect.width), 0, W);
+  mouse.y = clamp((e.clientY - rect.top) * (canvas.height / rect.height), 0, H);
+}
+canvas.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || aimPointer === e.pointerId) aimAt(e); });
+canvas.addEventListener("pointerdown", e => {
+  if (e.button !== 0 || aimPointer !== null) return;
+  e.preventDefault(); canvas.focus(); aimAt(e);
+  aimPointer = e.pointerId; canvas.setPointerCapture(e.pointerId); mouse.down = true;
 });
-canvas.addEventListener("mousedown", e => {
-  if (e.button !== 0) return;
-  canvas.focus();
-  mouse.down = true;
-});
-window.addEventListener("mouseup", () => mouse.down = false);
+const stopAim = e => { if (aimPointer === e.pointerId) { aimPointer = null; mouse.down = false; } };
+canvas.addEventListener("pointerup", stopAim);
+canvas.addEventListener("pointercancel", stopAim);
+canvas.addEventListener("lostpointercapture", stopAim);
+window.addEventListener("pointerup", stopAim);
+canvas.addEventListener("contextmenu", e => e.preventDefault());
 
+function holdButton(button, on, off) {
+  let pointer = null;
+  controlResets.push(() => { pointer = null; off(); });
+  button.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || pointer !== null) return;
+    e.preventDefault(); pointer = e.pointerId; button.setPointerCapture(pointer); on();
+  });
+  const release = e => { if (pointer === e.pointerId) { pointer = null; off(); } };
+  for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(event, release);
+  button.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); on(); } });
+  button.addEventListener("keyup", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); off(); } });
+  button.addEventListener("blur", off);
+}
+for (const key of ["w", "a", "s", "d"]) holdButton(document.getElementById(`move-${key}`), () => touchKeys.add(key), () => touchKeys.delete(key));
+holdButton(dashBtn, () => { touchActions.dash = true; pendingActions.dash = true; }, () => touchActions.dash = false);
+holdButton(pulseBtn, () => { touchActions.pulse = true; pendingActions.pulse = true; }, () => touchActions.pulse = false);
+
+soloBtn.addEventListener("click", soloGame);
 hostBtn.addEventListener("click", hostGame);
 joinBtn.addEventListener("click", joinGame);
 joinCodeEl.addEventListener("keydown", e => {
