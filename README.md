@@ -23,8 +23,8 @@ Connection failures and disconnections return to a usable lobby. A connection at
 
 ## Two tools, many ways to survive
 
-- **Dash — Space/Shift or Dash button:** move in your movement direction (or aim direction when standing still), briefly protected from contact. Ready again after 1.6 seconds. Use it to cross a charge lane, escape a crowd or reposition for a shot.
-- **Pulse — Q or Pulse button:** a larger shot that deals three damage, nudges enemies back and pierces up to four targets. Ready again after 2.4 seconds. Line up groups rather than spending it on one weak enemy. Release and press again for each ability.
+- **Dash â€” Space/Shift or Dash button:** move in your movement direction (or aim direction when standing still), briefly protected from contact. Ready again after 1.6 seconds. Use it to cross a charge lane, escape a crowd or reposition for a shot.
+- **Pulse â€” Q or Pulse button:** a larger shot that deals three damage, nudges enemies back and pierces up to four targets. Ready again after 2.4 seconds. Line up groups rather than spending it on one weak enemy. Release and press again for each ability.
 - **Chargers:** yellow diamonds stop and show a dashed line for 0.8 seconds, then commit to that direction and briefly recover. Their four health pips let you judge when a regular shot plus pulse will finish them. Ordinary chasers and fast runners remain.
 - Damage gives a short grace period, so a crowd cannot drain all health in one tick. Respawn restores health after 2.5 seconds and protects you for one second. Restart resets the round without replacing room members.
 
