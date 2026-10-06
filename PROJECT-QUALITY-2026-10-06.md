@@ -19,4 +19,22 @@ Baseline `95a899c` requires external signaling even for one player. Combat offer
 
 ## Evidence
 
-In progress.
+- Local: 27 behavior tests pass, including 9,000 simulated ticks with 16 players and collection caps. Both runtime JavaScript syntax checks and `git diff --check` pass.
+- Browser CI: [run 37538495740](https://github.com/generalgroovy/2darena/actions/runs/37538495740) passed against runtime commit `f7053d6`. Actual Chromium at 1366×768, touch-emulated 390×844 and 320×800 passed solo with PeerJS blocked, movement/fire, ability taps, held/released cooldown retry, restart and failed-network-to-solo recovery. No page errors or horizontal overflow. All three screenshots were visually inspected; captured telegraph frames use a deterministic enemy fixture, while model tests establish its timing. Screenshots and results are in `docs/evidence/2026-10-06/`. Earlier runs caught a real fast-input issue: releasing and pressing an ability inside one 30Hz tick looked like a held button. Press identities now preserve that edge without bypassing cooldowns. A phone movement test also needed to wait for its preceding dash to finish before measuring ordinary movement.
+- Self-review: restricted shortcuts to the arena; cleared touch/queued controls on focus loss and restart; kept solo available while a network connection is pending; rejected duplicate members and repeated peer-open callbacks. Restored the original 16-player color palette.
+- NOT RUN: physical-device touch ergonomics, actual PeerJS/WebRTC/NAT connectivity, signaling reliability, 16-player rendered/network capacity and human difficulty/fun assessment. The model stress test is not a performance benchmark.
+
+## Resulting behavior
+
+Solo starts immediately and does not depend on the asynchronous PeerJS download. Multiplayer still has an explicit waiting room, invite and host start/restart. Dash crosses danger, pulse rewards lined-up targets, and a diamond-shaped charger commits to its visible windup direction before recovering. Shape, direction line, cooldown text and health are visible without opening settings. Full learning/connection text is in disclosures. Touch uses captured pointer input; keyboard users can hold F for assisted fire.
+
+The extracted dependency-free `arena-model.js` owns the same combat for solo and host play. Client messages carry sanitized intent only. Invalid rendering snapshots retain the last usable state; guest input stops after half a second without a fresh packet. Respawning uses round state instead of delayed callbacks. No accounts, saves, paid dependencies or external services were added.
+
+## Sources consulted
+
+- [Pointer events and capture](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events) informed cancellation/captured multi-pointer controls.
+- [Playwright CI guidance](https://playwright.dev/docs/ci-intro) informed the isolated GitHub browser workflow and retained artifacts. The application remains build-free; Playwright is test-only.
+
+## Release / rollback
+
+Parent reviews and promotes the passing candidate. Publish all four runtime files together: `index.html`, `style.css`, `arena-model.js`, `game.js`. Old and new multiplayer clients should not be mixed; ask the room to reload after a release. Baseline `95a899c411864e5350c3dbf28524d2c8ac1a830a` is the preserved rollback reference. Main/publication have not been changed by this owner.
