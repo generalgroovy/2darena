@@ -42,6 +42,15 @@ try {
     if (touch) await page.locator('#pulseBtn').tap(); else await page.keyboard.press('q');
     await page.waitForFunction(() => world.players.solo.pulseCooldown > 1.8);
     assert.match(await page.locator('#pulseBtn').textContent(), /Pulse.*s/);
+    if (!touch) {
+      await page.locator('#pulseBtn').focus();
+      await page.keyboard.down('Space');
+      await page.waitForTimeout(2700);
+      await page.keyboard.up('Space');
+      assert.equal(await page.evaluate(() => world.players.solo.pulseCooldown), 0, 'held cooldown press must not fire later');
+      await page.keyboard.press('Space');
+      await page.waitForFunction(() => world.players.solo.pulseCooldown > 1.8);
+    }
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     assert.equal(overflow, false, `overflow at ${width}`);
     for (const id of ['dashBtn', 'pulseBtn', ...(touch ? ['move-w', 'move-a', 'move-s', 'move-d'] : [])]) {

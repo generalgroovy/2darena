@@ -21,11 +21,26 @@ test('losing focus clears held movement and firing; code input does not move pla
   const app=setup();
   app.events.keydown({key:'w',target:{tagName:'INPUT'}});
   assert.equal(app.run('localInput().up'),false);
-  app.events.keydown({key:'w',target:{tagName:'CANVAS'}});
+  app.events.keydown({key:'w',target:app.elements.get('game')});
   app.run('mouse.down=true');
   assert.equal(app.run('localInput().up'),true);
   app.events.blur();
   assert.equal(app.run('localInput().up'),false);assert.equal(app.run('localInput().shoot'),false);
+});
+
+test('links and non-arena controls keep Space and arrow keys without queuing abilities',()=>{
+  const app=setup();let prevented=false;
+  for(const target of [{tagName:'A'}, {tagName:'BUTTON'}, {tagName:'DIV',role:'button'}]) {
+    app.events.keydown({key:' ',target,preventDefault(){prevented=true;}});
+    app.events.keydown({key:'ArrowDown',target,preventDefault(){prevented=true;}});
+  }
+  assert.equal(prevented,false);assert.equal(app.run('localInput().dash'),false);assert.equal(app.run('keys.size'),0);
+});
+
+test('quick ability taps survive until the next simulation input, then clear',()=>{
+  const app=setup(),target=app.elements.get('game');
+  app.events.keydown({key:'q',target});app.events.keyup({key:'q'});
+  assert.equal(app.run('localInput().pulse'),true);assert.equal(app.run('localInput().pulse'),false);
 });
 test('connection state remains visible while lobby is hidden',()=>{
   const app=setup();app.run("setStatus('Disconnected from host.')");

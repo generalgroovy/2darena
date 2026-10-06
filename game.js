@@ -444,7 +444,8 @@ function releaseControls() {
 }
 
 window.addEventListener("keydown", e => {
-  if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SUMMARY"].includes(e.target?.tagName)) return;
+  // Shortcuts belong to the arena. Links, dialogs and other controls keep browser keys.
+  if (e.target !== canvas || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
   if (!e.repeat && [" ", "Shift"].includes(e.key)) pendingActions.dash = true;
   if (!e.repeat && e.key.toLowerCase() === "q") pendingActions.pulse = true;
@@ -452,6 +453,7 @@ window.addEventListener("keydown", e => {
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur", releaseControls);
+canvas.addEventListener("blur", releaseControls);
 document.addEventListener?.("visibilitychange", () => { if (document.hidden) releaseControls(); });
 
 function aimAt(e) {
