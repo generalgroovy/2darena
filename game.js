@@ -185,7 +185,7 @@ function hostGame() {
   if (!started) return;
   const { token, currentPeer } = started;
   currentPeer.on("open", id => {
-    if (session !== token) return;
+    if (session !== token || world) return;
     clearTimeout(connectionTimeout);
     myId = id;
     hostId = id;
@@ -201,7 +201,7 @@ function hostGame() {
     if (session !== token) { conn.close(); return; }
     conn.on("open", () => {
       if (session !== token || !world) { conn.close(); return; }
-      if (conn.peer === myId || conns.has(conn.peer) || ["__proto__", "constructor", "prototype"].includes(conn.peer)) { conn.close(); return; }
+      if (typeof conn.peer !== "string" || !conn.peer || conn.peer.length > 128 || conn.peer === myId || conns.has(conn.peer) || ["__proto__", "constructor", "prototype"].includes(conn.peer)) { conn.close(); return; }
       if (Object.keys(world.players).length >= MAX_PLAYERS) {
         conn.send({ type: "full" });
         conn.close();
@@ -238,7 +238,7 @@ function joinGame() {
   if (!started) return;
   const { token, currentPeer } = started;
   currentPeer.on("open", id => {
-    if (session !== token) return;
+    if (session !== token || hostConn) return;
     myId = id;
     const conn = currentPeer.connect(code, { reliable: false });
     hostConn = conn;

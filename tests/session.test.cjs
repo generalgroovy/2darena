@@ -23,7 +23,7 @@ function setup(options={}){
  requestAnimationFrame(){const id=++serial;frames.add(id);return id;},cancelAnimationFrame:id=>frames.delete(id),
  setTimeout(fn){const id=++serial;timeouts.set(id,fn);return id;},clearTimeout:id=>timeouts.delete(id)});
  vm.runInContext(readFileSync(path.join(__dirname,'../game.js'),'utf8'),context);
- return {peers,elements,intervals,frames,timeouts,document,run:code=>vm.runInContext(code,context)};
+ return {peers,elements,intervals,frames,timeouts,document,makeConnection(id){const conn=new Events();conn.peer=id;return conn;},run:code=>vm.runInContext(code,context)};
 }
 
 test('double-click hosting creates one peer; leaving tears down timers and ignores stale callbacks',()=>{
@@ -124,4 +124,19 @@ test('guest snapshots reject malformed render geometry without replacing usable 
  conn.emit('data',{type:'snapshot',snapshot:M.snapshot(w)});assert.equal(app.run('snapshot.phase'),'playing');
  const bad=M.snapshot(w);bad.players.me.r=-4;bad.score=999;
  conn.emit('data',{type:'snapshot',snapshot:bad});assert.equal(app.run('snapshot.score'),0);assert.equal(app.run('snapshot.players.me.r'),14);
+});
+
+test('host owns guest state, rejects duplicate members and caps actual room membership',()=>{
+ const app=setup();app.run('hostGame()');const host=app.peers[0];host.emit('open','arena-host');
+ const guest=app.makeConnection('guest');host.emit('connection',guest);guest.emit('open');
+ guest.emit('data',{type:'input',input:{right:true,mx:Infinity,pulse:'true'},score:50000});
+ assert.equal(app.run('world.score'),0);assert.equal(app.run('world.players.guest.input.mx'),480);assert.equal(app.run('world.players.guest.input.pulse'),false);
+ const duplicate=app.makeConnection('guest');host.emit('connection',duplicate);duplicate.emit('open');
+ assert.equal(duplicate.open,false);assert.equal(app.run('Object.keys(world.players).length'),2);assert.equal(app.run('conns.size'),1);
+ for(let i=0;i<14;i++){const conn=app.makeConnection('member'+i);host.emit('connection',conn);conn.emit('open');}
+ assert.equal(app.run('Object.keys(world.players).length'),16);
+ const full=app.makeConnection('extra');host.emit('connection',full);full.emit('open');assert.equal(full.open,false);
+ host.emit('open','another-open');assert.equal(app.intervals.size,2);assert.equal(app.run('myId'),'arena-host');
+ app.run('stopSession();soloGame()');guest.emit('data',{type:'input',input:{shoot:true}});guest.emit('close');
+ assert.equal(app.run('Object.keys(world.players).length'),1);assert.equal(app.run('myId'),'solo');
 });
