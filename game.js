@@ -41,6 +41,7 @@ let lobbyReturnFocus = hostBtn;
 const touchKeys = new Set();
 const touchActions = { dash: false, pulse: false };
 const pendingActions = { dash: false, pulse: false };
+const actionPresses = { dash: 0, pulse: 0 };
 const controlResets = [];
 let aimPointer = null;
 
@@ -277,7 +278,8 @@ function localInput() {
     left: held("a") || held("arrowleft"), right: held("d") || held("arrowright"),
     mx, my, shoot: mouse.down || held("f"),
     dash: held(" ") || held("shift") || touchActions.dash || pendingActions.dash,
-    pulse: held("q") || touchActions.pulse || pendingActions.pulse
+    pulse: held("q") || touchActions.pulse || pendingActions.pulse,
+    dashPress: actionPresses.dash, pulsePress: actionPresses.pulse
   };
   pendingActions.dash = false; pendingActions.pulse = false;
   return input;
@@ -443,12 +445,17 @@ function releaseControls() {
   pendingActions.dash = false; pendingActions.pulse = false;
 }
 
+function queueAbility(name) {
+  pendingActions[name] = true;
+  actionPresses[name] = actionPresses[name] % Number.MAX_SAFE_INTEGER + 1;
+}
+
 window.addEventListener("keydown", e => {
   // Shortcuts belong to the arena. Links, dialogs and other controls keep browser keys.
   if (e.target !== canvas || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
-  if (!e.repeat && [" ", "Shift"].includes(e.key)) pendingActions.dash = true;
-  if (!e.repeat && e.key.toLowerCase() === "q") pendingActions.pulse = true;
+  if (!e.repeat && [" ", "Shift"].includes(e.key)) queueAbility("dash");
+  if (!e.repeat && e.key.toLowerCase() === "q") queueAbility("pulse");
   keys.add(e.key.toLowerCase());
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
@@ -483,13 +490,13 @@ function holdButton(button, on, off) {
   });
   const release = e => { if (pointer === e.pointerId) { pointer = null; off(); } };
   for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(event, release);
-  button.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); on(); } });
+  button.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (!e.repeat) on(); } });
   button.addEventListener("keyup", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); off(); } });
   button.addEventListener("blur", off);
 }
 for (const key of ["w", "a", "s", "d"]) holdButton(document.getElementById(`move-${key}`), () => touchKeys.add(key), () => touchKeys.delete(key));
-holdButton(dashBtn, () => { touchActions.dash = true; pendingActions.dash = true; }, () => touchActions.dash = false);
-holdButton(pulseBtn, () => { touchActions.pulse = true; pendingActions.pulse = true; }, () => touchActions.pulse = false);
+holdButton(dashBtn, () => { touchActions.dash = true; queueAbility("dash"); }, () => touchActions.dash = false);
+holdButton(pulseBtn, () => { touchActions.pulse = true; queueAbility("pulse"); }, () => touchActions.pulse = false);
 
 soloBtn.addEventListener("click", soloGame);
 hostBtn.addEventListener("click", hostGame);

@@ -39,6 +39,14 @@ test('ordinary shots hit only the nearer target, with swept collision between ti
   assert.equal(M.segmentDistance(0, 0, 100, 0, { x: 50, y: 2 }), 2);
 });
 
+test('press identities preserve a fresh press between ticks without repeating a held action', () => {
+  const w = game(); tick(w, 1, { pulse: true, pulsePress: 1 });
+  tick(w, 80, { pulse: true, pulsePress: 1 }); assert.equal(w.players.me.pulseCooldown, 0);
+  tick(w, 1, { pulse: true, pulsePress: 2 }); assert.equal(w.players.me.pulseCooldown, M.PULSE_COOLDOWN);
+  tick(w, 1, { pulse: true, pulsePress: 3 }); const cooldown = w.players.me.pulseCooldown;
+  tick(w, 1, { pulse: true, pulsePress: 3 }); assert.ok(w.players.me.pulseCooldown < cooldown);
+});
+
 test('charger locks a visible direction, waits, commits straight and then recovers', () => {
   const w = game(); w.enemies = [enemy(400, 270, { kind: 'charger', health: 4, phase: 'chase', timer: 0 })];
   tick(w, 1); const e = w.enemies[0]; const angle = e.angle;

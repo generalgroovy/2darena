@@ -6,12 +6,13 @@
   const colors = ["#6ee7b7", "#93c5fd", "#fca5a5", "#fcd34d", "#c4b5fd", "#fdba74", "#67e8f9", "#f9a8d4", "#bef264", "#ddd6fe", "#a7f3d0", "#fecaca", "#bfdbfe", "#fde68a", "#e9d5ff", "#ccfbf1"];
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-  const neutral = () => ({ up: false, down: false, left: false, right: false, shoot: false, dash: false, pulse: false, mx: W / 2, my: H / 2 });
+  const neutral = () => ({ up: false, down: false, left: false, right: false, shoot: false, dash: false, pulse: false, dashPress: 0, pulsePress: 0, mx: W / 2, my: H / 2 });
 
   function sanitizeInput(input) {
     const value = input && typeof input === "object" ? input : {};
     const result = neutral();
     for (const key of ["up", "down", "left", "right", "shoot", "dash", "pulse"]) result[key] = value[key] === true;
+    for (const key of ["dashPress", "pulsePress"]) result[key] = Number.isSafeInteger(value[key]) && value[key] > 0 ? value[key] : 0;
     result.mx = Number.isFinite(value.mx) ? clamp(value.mx, 0, W) : W / 2;
     result.my = Number.isFinite(value.my) ? clamp(value.my, 0, H) : H / 2;
     return result;
@@ -24,7 +25,7 @@
   function makePlayer(id, name, index = 0, random = Math.random) {
     return { id, name, x: 160 + random() * (W - 320), y: 120 + random() * (H - 240), r: 14, speed: 250,
       health: 100, alive: true, fireCooldown: 0, dashCooldown: 0, pulseCooldown: 0, dashTime: 0,
-      dashX: 0, dashY: 0, invulnerable: 0, respawnTime: 0, inputAge: 0, dashHeld: false, pulseHeld: false,
+      dashX: 0, dashY: 0, invulnerable: 0, respawnTime: 0, inputAge: 0, dashHeld: false, pulseHeld: false, lastDashPress: 0, lastPulsePress: 0,
       input: neutral(), color: colors[index % colors.length] };
   }
 
@@ -78,7 +79,9 @@
       const dx = Number(input.right) - Number(input.left), dy = Number(input.down) - Number(input.up);
       const len = Math.hypot(dx, dy) || 1;
       const aim = Math.atan2(input.my - p.y, input.mx - p.x);
-      if (input.dash && !p.dashHeld && p.dashCooldown <= 0) {
+      const freshDash = input.dashPress > 0 ? input.dashPress !== p.lastDashPress : !p.dashHeld;
+      const freshPulse = input.pulsePress > 0 ? input.pulsePress !== p.lastPulsePress : !p.pulseHeld;
+      if (input.dash && freshDash && p.dashCooldown <= 0) {
         p.dashX = dx || dy ? dx / len : Math.cos(aim);
         p.dashY = dx || dy ? dy / len : Math.sin(aim);
         p.dashTime = .16;
@@ -86,12 +89,14 @@
         p.dashCooldown = DASH_COOLDOWN;
       }
       p.dashHeld = input.dash;
+      if (input.dashPress > 0) p.lastDashPress = input.dashPress;
       const dashing = p.dashTime > 0;
       p.x = clamp(p.x + (dashing ? p.dashX * 720 : dx / len * p.speed) * dt, p.r, W - p.r);
       p.y = clamp(p.y + (dashing ? p.dashY * 720 : dy / len * p.speed) * dt, p.r, H - p.r);
       p.dashTime = Math.max(0, p.dashTime - dt);
-      const pulse = input.pulse && !p.pulseHeld && p.pulseCooldown <= 0;
+      const pulse = input.pulse && freshPulse && p.pulseCooldown <= 0;
       p.pulseHeld = input.pulse;
+      if (input.pulsePress > 0) p.lastPulsePress = input.pulsePress;
       if ((pulse || input.shoot && p.fireCooldown <= 0) && world.bullets.length < LIMITS.bullets) {
         world.bullets.push({ owner: p.id, x: p.x + Math.cos(aim) * 20, y: p.y + Math.sin(aim) * 20,
           vx: Math.cos(aim) * (pulse ? 850 : 620), vy: Math.sin(aim) * (pulse ? 850 : 620), r: pulse ? 8 : 4,
