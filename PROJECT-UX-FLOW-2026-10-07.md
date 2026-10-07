@@ -25,4 +25,6 @@ Root separately accepted the actual working runtime in CUA: damaged health remai
 
 ## Release boundary
 
-Root's conditional promotion gates have passed. Publication and exact public hashes will be recorded after Pages deployment. Intended URL: <https://generalgroovy.github.io/2darena/>. Simulated PeerJS events establish application semantics, not physical-network connectivity, signaling uptime, touch-device ergonomics or 16-player performance.
+Root's conditional promotion gates passed, and the reviewed release was fast-forwarded to main at `0e47ca815ed16aeeeddbff064ebb3b956c7c85af`. [Pages deployment 37613707850](https://github.com/generalgroovy/2darena/actions/runs/37613707850) succeeded after requesting the normal repository Pages rebuild (the documentation commit's skip-ci marker suppressed automatic triggering). At 2026-10-07T11:25:25Z, all **four public runtime files** returned HTTP 200 and exactly matched canonical Git SHA-256 hashes with standard HTTPS certificate validation. Receipt: shared `ux-flow-2026-10-07/evidence/arena-public.json`. Live URL: <https://generalgroovy.github.io/2darena/>. This final report update changes documentation only.
+
+Simulated PeerJS events establish application semantics, not physical-network connectivity, signaling uptime, touch-device ergonomics or 16-player performance.
