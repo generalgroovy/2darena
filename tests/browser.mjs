@@ -63,6 +63,13 @@ try {
     for (const id of ['dashBtn', 'pulseBtn', ...(touch ? ['move-w', 'move-a', 'move-s', 'move-d'] : [])]) {
       const box = await page.locator('#' + id).boundingBox(); assert.ok(box.width >= 44 && box.height >= 44, `${id} touch target`);
     }
+    if (height === 420) {
+      await page.locator('#game').focus();
+      for (const id of ['game', 'pauseBtn', 'dashBtn', 'pulseBtn', 'move-w', 'move-a', 'move-s', 'move-d']) {
+        const box = await page.locator('#' + id).boundingBox();
+        assert.ok(box.y >= 0 && box.y + box.height <= height, `${id} stays with the whole arena in the landscape viewport`);
+      }
+    }
     if (touch) {
       await page.waitForFunction(() => world.players.solo.dashTime === 0);
       await page.locator('#move-a').focus(); const start = await page.evaluate(() => world.players.solo.x);

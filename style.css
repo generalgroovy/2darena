@@ -170,3 +170,13 @@ summary { cursor: pointer; padding: 10px 0; }
   .join { flex-direction: column; }
   .play-status span { font-size: 13px; }
 }
+@media (min-width: 701px) and (max-height: 600px) {
+  #gameWrap { display: grid; grid-template-columns: minmax(0, 1fr) 150px; column-gap: 12px; }
+  #gameWrap.hidden { display: none; }
+  .play-status, .hud, #inviteLink, #gameHelp { grid-column: 1 / -1; }
+  canvas { grid-column: 1; grid-row: 2; justify-self: center; width: auto; max-width: 100%; height: min(calc(100svh - 190px), calc((100vw - 210px) * .5625)); }
+  .combat-controls { grid-column: 2; grid-row: 2; flex-direction: column; align-self: center; margin-top: 0; gap: 8px; }
+  .combat-controls .abilities { width: 100%; grid-template-columns: minmax(0, 1fr); }
+  .abilities button { grid-row: auto; min-width: 0; }
+  .abilities span { display: none; }
+}
