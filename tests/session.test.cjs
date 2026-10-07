@@ -173,6 +173,17 @@ test('solo auto-pauses for focus loss, hidden document and help; help closing ne
  assert.equal(app.elements.get('pauseBtn').textContent,'Pause');
 });
 
+test('OS keyboard repeat cannot reactivate held movement or fire after pause and resume',()=>{
+ const app=setup();app.run('soloGame()');const target=app.elements.get('game');
+ for(const key of ['f','w']) app.events.keydown({key,target});
+ assert.equal(app.run('localInput().shoot'),true);assert.equal(app.run('localInput().up'),true);
+ app.run('setSoloPaused(true);setSoloPaused(false)');
+ for(const key of ['f','w']) app.events.keydown({key,target,repeat:true});
+ assert.equal(app.run('localInput().shoot'),false);assert.equal(app.run('localInput().up'),false);
+ for(const key of ['f','w']) {app.events.keyup({key});app.events.keydown({key,target,repeat:false});}
+ assert.equal(app.run('localInput().shoot'),true);assert.equal(app.run('localInput().up'),true);
+});
+
 test('multiplayer never pauses from focus loss, help or solo controls',()=>{
  const app=setup();app.run('hostGame()');app.peers[0].emit('open','arena-host');app.run('startRound()');
  assert.equal(app.elements.get('pauseBtn').hidden,true);

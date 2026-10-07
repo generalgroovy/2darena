@@ -154,7 +154,7 @@ summary { cursor: pointer; padding: 10px 0; }
 #move-a { grid-column: 1; grid-row: 2; }
 #move-s { grid-column: 2; grid-row: 2; }
 #move-d { grid-column: 3; grid-row: 2; }
-@media (pointer: coarse), (max-width: 700px) {
+@media (any-pointer: coarse), (max-width: 900px) {
   main { padding: 12px; }
   .panel { padding: 18px; }
   .move-pad { display: grid; }

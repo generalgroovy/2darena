@@ -497,8 +497,10 @@ window.addEventListener("keydown", e => {
   }
   if (isSolo && soloPaused) return;
   if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
-  if (!e.repeat && [" ", "Shift"].includes(e.key)) queueAbility("dash");
-  if (!e.repeat && e.key.toLowerCase() === "q") queueAbility("pulse");
+  // A held key must be released and pressed again after pause or focus loss.
+  if (e.repeat) return;
+  if ([" ", "Shift"].includes(e.key)) queueAbility("dash");
+  if (e.key.toLowerCase() === "q") queueAbility("pulse");
   keys.add(e.key.toLowerCase());
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
