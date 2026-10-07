@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "width": 1366,
+      "height": 768,
+      "touch": false,
+      "soloWithoutSignaling": "PASS",
+      "movementFireAbilities": "PASS",
+      "pauseHelpResumeFocus": "PASS",
+      "restartAndRecovery": "PASS",
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "touch": true,
+      "soloWithoutSignaling": "PASS",
+      "movementFireAbilities": "PASS",
+      "pauseHelpResumeFocus": "PASS",
+      "restartAndRecovery": "PASS",
+      "overflow": false
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "touch": true,
+      "soloWithoutSignaling": "PASS",
+      "movementFireAbilities": "PASS",
+      "pauseHelpResumeFocus": "PASS",
+      "restartAndRecovery": "PASS",
+      "overflow": false
+    },
+    {
+      "width": 844,
+      "height": 420,
+      "touch": true,
+      "soloWithoutSignaling": "PASS",
+      "movementFireAbilities": "PASS",
+      "pauseHelpResumeFocus": "PASS",
+      "restartAndRecovery": "PASS",
+      "overflow": false
+    }
+  ],
+  "pageErrors": [],
+  "multiplayer": "NOT_RUN: model PeerJS events only; no physical-network claim"
+}

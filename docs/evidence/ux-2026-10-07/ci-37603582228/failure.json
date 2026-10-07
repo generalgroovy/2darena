@@ -1,0 +1,57 @@
+{
+  "error": "Cannot read properties of null (reading 'width')",
+  "pageErrors": [],
+  "state": {
+    "input": {
+      "up": false,
+      "down": false,
+      "left": false,
+      "right": false,
+      "mx": 480,
+      "my": 270,
+      "shoot": false,
+      "dash": false,
+      "pulse": false,
+      "dashPress": 1,
+      "pulsePress": 1
+    },
+    "player": {
+      "id": "solo",
+      "name": "You",
+      "x": 706.0367771089215,
+      "y": 180.254116661653,
+      "r": 14,
+      "speed": 250,
+      "health": 100,
+      "alive": true,
+      "fireCooldown": 0,
+      "dashCooldown": 1.3333333333333326,
+      "pulseCooldown": 2.233333333333334,
+      "dashTime": 0,
+      "dashX": -0.9294219732976016,
+      "dashY": 0.3690186926858751,
+      "invulnerable": 0,
+      "respawnTime": 0,
+      "inputAge": 0.03333333333333333,
+      "dashHeld": false,
+      "pulseHeld": false,
+      "lastDashPress": 1,
+      "lastPulsePress": 1,
+      "input": {
+        "up": false,
+        "down": false,
+        "left": false,
+        "right": false,
+        "mx": 480,
+        "my": 270,
+        "shoot": false,
+        "dash": false,
+        "pulse": false,
+        "dashPress": 1,
+        "pulsePress": 1
+      },
+      "color": "#6ee7b7"
+    },
+    "focus": "game"
+  }
+}
