@@ -46,6 +46,16 @@ p {
 .row { flex-wrap: wrap; }
 .row button { flex: 1; }
 .secondary, .hud button { background: #25354d; color: #edf2ff; }
+.intro { margin: 0 0 20px; }
+.solo-start { display: grid; gap: 12px; }
+.ready { color: #9df2cc; font-size: 14px; }
+.multiplayer { margin-top: 24px; padding-top: 20px; border-top: 1px solid #33425f; }
+.multiplayer h2 { margin: 0; display: flex; align-items: center; justify-content: space-between; font-size: 18px; }
+.multiplayer h2 span { font-size: 13px; font-weight: 400; color: #b7c6dc; }
+.multiplayer .row { margin: 12px 0; }
+.join { margin: 12px 0; }
+#status { margin: 12px 0 0; font-size: 14px; }
+#cancelConnectBtn { margin-top: 12px; }
 
 input, button {
   font: inherit;
@@ -126,7 +136,12 @@ canvas {
 #inviteLink { width: 100%; margin-top: 12px; }
 summary { cursor: pointer; padding: 10px 0; }
 
-.play-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 10px 0; }
+.play-status { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 10px 0; }
+.play-status button { min-height: 44px; padding: 8px 14px; }
+#gameHelp { margin-top: 12px; border-top: 1px solid #33425f; }
+#gameHelp summary { min-height: 44px; }
+.control-tips { max-width: 70ch; }
+.control-tips p { margin: 8px 0; }
 .play-status span, .abilities span { color: #cbd5e1; font-size: 14px; }
 .combat-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; }
 .abilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; }

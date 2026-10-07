@@ -19,10 +19,14 @@ const statsEl = document.getElementById("stats");
 const roomInfoEl = document.getElementById("roomInfo");
 const startBtn = document.getElementById("startBtn");
 const inviteLink = document.getElementById("inviteLink");
+const pauseBtn = document.getElementById("pauseBtn");
+const gameHelp = document.getElementById("gameHelp");
+const cancelConnectBtn = document.getElementById("cancelConnectBtn");
 
 let peer = null;
 let isHost = false;
 let isSolo = false;
+let soloPaused = false;
 let myId = null;
 let hostId = null;
 let conns = new Map();
@@ -46,6 +50,7 @@ const controlResets = [];
 let aimPointer = null;
 
 function stopSession(message = "Left room.", restoreFocus = true) {
+  const wasSolo = isSolo;
   session += 1; // Invalidate late callbacks before closing their connections.
   const previousPeer = peer;
   peer = null;
@@ -54,6 +59,7 @@ function stopSession(message = "Left room.", restoreFocus = true) {
   world = null;
   isHost = false;
   isSolo = false;
+  soloPaused = false;
   myId = null;
   hostId = null;
   releaseControls();
@@ -72,7 +78,9 @@ function stopSession(message = "Left room.", restoreFocus = true) {
   lobby.classList.remove("hidden");
   gameWrap.classList.add("hidden");
   inviteLink.hidden = true;
-  setStatus(message);
+  cancelConnectBtn.hidden = true;
+  gameHelp.open = false;
+  setStatus(wasSolo ? "Host a room or join with a code." : message);
   if (restoreFocus) lobbyReturnFocus.focus();
 }
 
@@ -84,6 +92,7 @@ function beginSession(hosting, code) {
   hostId = code;
   hostBtn.disabled = true;
   joinBtn.disabled = true;
+  cancelConnectBtn.hidden = false;
   try { peer = hosting ? new Peer(code) : new Peer(); }
   catch { stopSession("Connection unavailable. Check your connection and try again."); return null; }
   const currentPeer = peer;
@@ -138,7 +147,30 @@ function showGame(roomCode) {
   document.getElementById("leaveBtn").textContent = isSolo ? "Back to menu" : "Leave room";
   startBtn.hidden = !isHost;
   startBtn.textContent = "Start wave";
+  cancelConnectBtn.hidden = true;
+  pauseBtn.hidden = !isSolo;
+  pauseBtn.textContent = "Pause";
+  document.getElementById("pauseHelp").textContent = isSolo
+    ? "Solo pauses here and when you switch away. Resume when ready. Escape also pauses while the arena is focused."
+    : "Multiplayer keeps running while you read or switch away. Keep the host's tab active.";
   canvas.focus();
+}
+
+function setSoloPaused(paused, focus = true) {
+  if (!isSolo || !world || world.phase !== "playing" || soloPaused === paused) return;
+  soloPaused = paused;
+  releaseControls();
+  // Remove the last sampled controls too: resume starts from a neutral frame.
+  world.players[myId].input = sanitizeInput({});
+  pauseBtn.textContent = paused ? "Resume" : "Pause";
+  setStatus(paused ? "Solo paused. Resume when ready." : "Solo in progress. Hold F for assisted fire.");
+  if (!paused) gameHelp.open = false;
+  if (focus) (paused ? pauseBtn : canvas).focus();
+}
+
+function suspendSolo() {
+  releaseControls();
+  setSoloPaused(true, false);
 }
 
 function initWorld() {
@@ -148,11 +180,14 @@ function initWorld() {
 function startRound() {
   if (!isHost || !world) return;
   ArenaModel.startRound(world);
+  soloPaused = false;
+  pauseBtn.textContent = "Pause";
+  gameHelp.open = false;
   releaseControls();
   startBtn.textContent = "Restart wave";
   snapshot = compressWorld(world);
   broadcastSnapshot();
-  setStatus("Move, aim and hold to fire. Dash through danger; pulse through a line of enemies.");
+  setStatus(isSolo ? "Solo in progress. Hold F for assisted fire." : "Wave in progress. Hold F for assisted fire.");
   canvas.focus();
 }
 
@@ -266,6 +301,7 @@ function joinGame() {
 }
 
 function localInput() {
+  if (isSolo && soloPaused) return sanitizeInput({});
   const held = key => keys.has(key) || touchKeys.has(key);
   let mx = mouse.x, my = mouse.y;
   const me = snapshot.players?.[myId];
@@ -286,7 +322,7 @@ function localInput() {
 }
 
 function hostTick() {
-  if (!world) return;
+  if (!world || (isSolo && soloPaused)) return;
   if (world.players[myId]) {
     world.players[myId].input = localInput();
     world.players[myId].inputAge = 0;
@@ -400,7 +436,7 @@ function drawSnapshot(s) {
 
   statsEl.textContent = `Players: ${players.length}/${MAX_PLAYERS} · Enemies: ${(s.enemies || []).length} · Score: ${s.score || 0} · Wave: ${s.wave || 1}`;
   const me = s.players?.[myId];
-  const active = s.phase === "playing" && me?.alive;
+  const active = s.phase === "playing" && me?.alive && !soloPaused;
   for (const [button, label, cooldown, key] of [[dashBtn, "Dash", me?.dashCooldown, "Space"], [pulseBtn, "Pulse", me?.pulseCooldown, "Q"]]) {
     const text = `${label} · ${cooldown > 0 ? cooldown.toFixed(1) + "s" : key}`;
     if (button.textContent !== text) button.textContent = text;
@@ -409,13 +445,13 @@ function drawSnapshot(s) {
   const health = document.getElementById("health");
   const healthText = me ? me.alive ? `Health ${Math.ceil(me.health)}/100` : "Respawning…" : "Connecting…";
   if (health.textContent !== healthText) health.textContent = healthText;
-  if (s.phase === "waiting" || me?.alive === false) {
+  if (soloPaused || s.phase === "waiting" || me?.alive === false) {
     ctx.fillStyle = "rgba(8,17,31,.88)";
     ctx.fillRect(170, H / 2 - 32, W - 340, 64);
     ctx.fillStyle = "#ffffff";
     ctx.font = "22px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(me?.alive === false ? "Respawning…" : isHost ? "Ready? Start wave below." : "Waiting for host", W / 2, H / 2 + 8);
+    ctx.fillText(soloPaused ? "Paused · Resume when ready" : me?.alive === false ? "Respawning…" : isHost ? "Ready? Start wave below." : "Waiting for host", W / 2, H / 2 + 8);
   }
 }
 
@@ -446,6 +482,7 @@ function releaseControls() {
 }
 
 function queueAbility(name) {
+  if (isSolo && soloPaused) return;
   pendingActions[name] = true;
   actionPresses[name] = actionPresses[name] % Number.MAX_SAFE_INTEGER + 1;
 }
@@ -453,15 +490,21 @@ function queueAbility(name) {
 window.addEventListener("keydown", e => {
   // Shortcuts belong to the arena. Links, dialogs and other controls keep browser keys.
   if (e.target !== canvas || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === "Escape" && isSolo) {
+    e.preventDefault();
+    if (!e.repeat) setSoloPaused(!soloPaused);
+    return;
+  }
+  if (isSolo && soloPaused) return;
   if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
   if (!e.repeat && [" ", "Shift"].includes(e.key)) queueAbility("dash");
   if (!e.repeat && e.key.toLowerCase() === "q") queueAbility("pulse");
   keys.add(e.key.toLowerCase());
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
-window.addEventListener("blur", releaseControls);
+window.addEventListener("blur", suspendSolo);
 canvas.addEventListener("blur", releaseControls);
-document.addEventListener?.("visibilitychange", () => { if (document.hidden) releaseControls(); });
+document.addEventListener?.("visibilitychange", () => { if (document.hidden) suspendSolo(); });
 
 function aimAt(e) {
   const rect = canvas.getBoundingClientRect();
@@ -470,6 +513,7 @@ function aimAt(e) {
 }
 canvas.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || aimPointer === e.pointerId) aimAt(e); });
 canvas.addEventListener("pointerdown", e => {
+  if (isSolo && soloPaused) { canvas.focus(); return; }
   if (e.button !== 0 || aimPointer !== null) return;
   e.preventDefault(); canvas.focus(); aimAt(e);
   aimPointer = e.pointerId; canvas.setPointerCapture(e.pointerId); mouse.down = true;
@@ -506,6 +550,9 @@ joinCodeEl.addEventListener("keydown", e => {
 });
 
 document.getElementById("leaveBtn").addEventListener("click", () => stopSession());
+cancelConnectBtn.addEventListener("click", () => stopSession("Connection cancelled. Host or join when ready."));
+pauseBtn.addEventListener("click", () => setSoloPaused(!soloPaused));
+gameHelp.addEventListener("toggle", () => { if (gameHelp.open) setSoloPaused(true, false); });
 startBtn.addEventListener("click", startRound);
 document.getElementById("copyBtn").addEventListener("click", copyInvite);
 if (window.location?.href) {

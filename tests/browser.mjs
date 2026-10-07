@@ -22,7 +22,7 @@ const browser = await chromium.launch();
 const results = [], errors = [];
 let activePage;
 try {
-  for (const [width, height, touch] of [[1366, 768, false], [390, 844, true], [320, 800, true]]) {
+  for (const [width, height, touch] of [[1366, 768, false], [390, 844, true], [320, 740, true], [844, 420, true]]) {
     const context = await browser.newContext({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
     const page = await context.newPage();
     activePage = page;
@@ -30,10 +30,15 @@ try {
     // Prove the solo journey stays usable when the signaling library is unavailable.
     await page.route('https://cdnjs.cloudflare.com/**', route => route.abort());
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await page.getByText('Solo is ready · no connection needed', { exact: true }).isVisible(), true);
+    assert.match(await page.locator('#status').textContent(), /Host a room or join/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `lobby overflow at ${width}`);
+    await page.screenshot({ path: `test-results/lobby-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Play solo', exact: true }).click();
     await page.waitForFunction(() => world?.phase === 'playing' && world.enemies.length > 0);
     assert.equal(await page.evaluate(() => typeof Peer), 'undefined');
     assert.equal(await page.locator('#copyBtn').isVisible(), false);
+    assert.match(await page.locator('.play-status').textContent(), /Hold F/);
     const x = await page.evaluate(() => world.players.solo.x);
     await page.keyboard.down('d'); await page.waitForTimeout(150); await page.keyboard.up('d');
     assert.ok(await page.evaluate(() => world.players.solo.x) > x + 20);
@@ -64,6 +69,25 @@ try {
       await page.keyboard.down('Space'); await page.waitForTimeout(150); await page.keyboard.up('Space');
       assert.ok(await page.evaluate(() => world.players.solo.x) < start - 20);
     }
+    // Solo freezes the actual simulation, not just rendering. No held input survives resume.
+    await page.locator('#game').focus();
+    await page.keyboard.down('f');
+    await page.keyboard.press('Escape');
+    await page.keyboard.up('f');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'pauseBtn');
+    assert.equal(await page.getByRole('button', { name: 'Resume', exact: true }).isVisible(), true);
+    const frozen = await page.evaluate(() => JSON.stringify(world));
+    await page.waitForTimeout(250);
+    assert.equal(await page.evaluate(() => JSON.stringify(world)), frozen, 'pause freezes movement, health, cooldowns and spawning');
+    await page.screenshot({ path: `test-results/paused-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Resume', exact: true }).press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'game');
+    assert.equal(await page.evaluate(() => localInput().shoot), false);
+    await page.locator('#gameHelp summary').click();
+    await page.waitForFunction(() => soloPaused);
+    await page.locator('#gameHelp summary').click();
+    assert.equal(await page.evaluate(() => soloPaused), true, 'closing help must not resume unexpectedly');
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
     // Deterministic renderer fixture exercises the charger telegraph; model tests prove its timing.
     await page.evaluate(() => {
       const p = world.players.solo;
@@ -72,11 +96,14 @@ try {
     });
     await page.waitForTimeout(80);
     await page.screenshot({ path: `test-results/arena-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
     await page.getByRole('button', { name: 'Restart wave', exact: true }).click();
+    assert.equal(await page.evaluate(() => soloPaused), false);
     assert.equal(await page.evaluate(() => world.score), 0);
     assert.equal(await page.evaluate(() => world.players.solo.health), 100);
     assert.equal(await page.evaluate(() => world.players.solo.pulseCooldown), 0);
     await page.getByRole('button', { name: 'Back to menu', exact: true }).click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'soloBtn');
     assert.equal(await page.evaluate(() => world), null);
     assert.equal(await page.evaluate(() => sessionTimers.length), 0);
     assert.equal(await page.evaluate(() => animationFrame), null);
@@ -85,7 +112,7 @@ try {
     await page.getByRole('button', { name: 'Play solo', exact: true }).click();
     await page.waitForFunction(() => world?.phase === 'playing');
     assert.equal(await page.evaluate(() => Object.keys(world.players).length), 1);
-    results.push({ width, height, touch, soloWithoutSignaling: 'PASS', movementFireAbilities: 'PASS', restartAndRecovery: 'PASS', overflow: false });
+    results.push({ width, height, touch, soloWithoutSignaling: 'PASS', movementFireAbilities: 'PASS', pauseHelpResumeFocus: 'PASS', restartAndRecovery: 'PASS', overflow: false });
     await context.close();
   }
   assert.deepEqual(errors, []);

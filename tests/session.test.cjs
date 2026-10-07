@@ -5,7 +5,7 @@ const {readFileSync}=require('node:fs');
 const path=require('node:path');
 
 function setup(options={}){
- const elements=new Map(),peers=[],intervals=new Set(),frames=new Set(),timeouts=new Map();let serial=0;
+ const elements=new Map(),peers=[],intervals=new Set(),frames=new Set(),timeouts=new Map(),events={},documentEvents={};let serial=0;
  class Events {
   constructor(){this.handlers={};this.open=true;this.peer='guest';}
   on(name,fn){this.handlers[name]=fn;}
@@ -17,13 +17,13 @@ function setup(options={}){
   destroy(){this.destroyed=true;this.emit('close');}
   connect(){this.conn=new Events();return this.conn;}
  }
- const document={activeElement:null,getElementById(id){if(!elements.has(id))elements.set(id,{value:'arena-test',classList:{add(){},remove(){}},focus(){document.activeElement=this;},select(){this.selected=true;},addEventListener(){},getContext(){return {};}});return elements.get(id);}};
- const context=vm.createContext({ArenaModel:require("../arena-model.js"),Peer,document,URL,navigator:{clipboard:{writeText:options.writeText||(()=>Promise.resolve())}},window:{location:{href:options.url||"https://example.test/arena/"},addEventListener(){}},
+ const document={activeElement:null,addEventListener(name,fn){documentEvents[name]=fn;},getElementById(id){if(!elements.has(id))elements.set(id,{value:'arena-test',handlers:{},classList:{add(){},remove(){}},focus(){document.activeElement=this;},select(){this.selected=true;},addEventListener(name,fn){this.handlers[name]=fn;},getContext(){return {};}});return elements.get(id);}};
+ const context=vm.createContext({ArenaModel:require("../arena-model.js"),Peer,document,URL,navigator:{clipboard:{writeText:options.writeText||(()=>Promise.resolve())}},window:{location:{href:options.url||"https://example.test/arena/"},addEventListener(name,fn){events[name]=fn;}},
  setInterval(){const id=++serial;intervals.add(id);return id;},clearInterval:id=>intervals.delete(id),
  requestAnimationFrame(){const id=++serial;frames.add(id);return id;},cancelAnimationFrame:id=>frames.delete(id),
  setTimeout(fn){const id=++serial;timeouts.set(id,fn);return id;},clearTimeout:id=>timeouts.delete(id)});
  vm.runInContext(readFileSync(path.join(__dirname,'../game.js'),'utf8'),context);
- return {peers,elements,intervals,frames,timeouts,document,makeConnection(id){const conn=new Events();conn.peer=id;return conn;},run:code=>vm.runInContext(code,context)};
+ return {peers,elements,intervals,frames,timeouts,document,events,documentEvents,makeConnection(id){const conn=new Events();conn.peer=id;return conn;},run:code=>vm.runInContext(code,context)};
 }
 
 test('double-click hosting creates one peer; leaving tears down timers and ignores stale callbacks',()=>{
@@ -139,4 +139,58 @@ test('host owns guest state, rejects duplicate members and caps actual room memb
  host.emit('open','another-open');assert.equal(app.intervals.size,2);assert.equal(app.run('myId'),'arena-host');
  app.run('stopSession();soloGame()');guest.emit('data',{type:'input',input:{shoot:true}});guest.emit('close');
  assert.equal(app.run('Object.keys(world.players).length'),1);assert.equal(app.run('myId'),'solo');
+});
+
+test('solo pause freezes every simulation value and resumes with neutral controls and canvas focus',()=>{
+ const app=setup();app.run('soloGame();keys.add("d");mouse.down=true;queueAbility("pulse");hostTick();setSoloPaused(true)');
+ assert.equal(app.elements.get('pauseBtn').textContent,'Resume');
+ assert.equal(app.document.activeElement,app.elements.get('pauseBtn'));
+ const frozen=app.run('JSON.stringify(world)');
+ app.run('keys.add("w");touchKeys.add("a");mouse.down=true;queueAbility("dash");for(let i=0;i<120;i++)hostTick()');
+ assert.equal(app.run('JSON.stringify(world)'),frozen);
+ assert.equal(app.run('localInput().shoot'),false);
+ assert.equal(app.run('localInput().up'),false);
+ app.run('setSoloPaused(false)');
+ assert.equal(app.document.activeElement,app.elements.get('game'));
+ assert.equal(app.elements.get('pauseBtn').textContent,'Pause');
+ assert.equal(app.run('localInput().up'),false);assert.equal(app.run('localInput().left'),false);
+ assert.equal(app.run('localInput().shoot'),false);assert.equal(app.run('localInput().dash'),false);
+ const cooldown=app.run('world.players.solo.pulseCooldown');app.run('hostTick()');
+ assert.ok(app.run('world.players.solo.pulseCooldown')<cooldown);
+ assert.equal(app.run('world.players.solo.dashCooldown'),0);
+});
+
+test('solo auto-pauses for focus loss, hidden document and help; help closing never auto-resumes',()=>{
+ const app=setup();app.run('soloGame()');app.events.blur();
+ assert.equal(app.run('soloPaused'),true);
+ app.run('setSoloPaused(false)');app.document.hidden=true;app.documentEvents.visibilitychange();
+ assert.equal(app.run('soloPaused'),true);
+ app.document.hidden=false;app.documentEvents.visibilitychange();assert.equal(app.run('soloPaused'),true);
+ app.run('setSoloPaused(false)');const help=app.elements.get('gameHelp');help.open=true;help.handlers.toggle();
+ assert.equal(app.run('soloPaused'),true);
+ help.open=false;help.handlers.toggle();assert.equal(app.run('soloPaused'),true);
+ app.run('startRound()');assert.equal(app.run('soloPaused'),false);assert.equal(help.open,false);
+ assert.equal(app.elements.get('pauseBtn').textContent,'Pause');
+});
+
+test('multiplayer never pauses from focus loss, help or solo controls',()=>{
+ const app=setup();app.run('hostGame()');app.peers[0].emit('open','arena-host');app.run('startRound()');
+ assert.equal(app.elements.get('pauseBtn').hidden,true);
+ assert.match(app.elements.get('pauseHelp').textContent,/keeps running/);
+ app.run('setSoloPaused(true)');app.events.blur();
+ const help=app.elements.get('gameHelp');help.open=true;help.handlers.toggle();
+ app.run('hostTick()');assert.equal(app.run('soloPaused'),false);assert.equal(app.run('world.enemies.length'),1);
+});
+
+test('cancel pending connection tears down the attempt, retains code and ignores late success',()=>{
+ const app=setup();app.run('joinGame()');const pending=app.peers[0];
+ assert.equal(app.elements.get('cancelConnectBtn').hidden,false);
+ app.elements.get('cancelConnectBtn').handlers.click();
+ assert.equal(app.timeouts.size,0);assert.equal(pending.destroyed,true);
+ assert.equal(app.elements.get('cancelConnectBtn').hidden,true);
+ assert.equal(app.elements.get('joinCode').value,'arena-test');
+ assert.equal(app.document.activeElement,app.elements.get('joinCode'));
+ assert.match(app.elements.get('status').textContent,/cancelled/);
+ pending.emit('open','late');assert.equal(app.run('myId'),null);
+ app.run('soloGame()');assert.equal(app.run('soloPaused'),false);
 });
