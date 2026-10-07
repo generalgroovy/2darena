@@ -132,6 +132,12 @@ canvas {
   overflow-wrap: anywhere;
 }
 
+#restartPrompt { flex-basis: 100%; min-width: 0; border: 1px solid #64748b; border-radius: 12px; padding: 14px; background: #172033; }
+#restartPrompt h2 { font-size: 18px; margin: 0 0 6px; }
+#restartPrompt p { margin: 0 0 12px; }
+.restart-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.restart-actions button { min-height: 44px; }
+
 [hidden] { display: none !important; }
 #inviteLink { width: 100%; margin-top: 12px; }
 summary { cursor: pointer; padding: 10px 0; }

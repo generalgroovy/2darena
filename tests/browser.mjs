@@ -104,7 +104,31 @@ try {
     await page.waitForTimeout(80);
     await page.screenshot({ path: `test-results/arena-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Pause', exact: true }).click();
-    await page.getByRole('button', { name: 'Restart wave', exact: true }).click();
+    await page.evaluate(() => { world.score = 400; world.wave = 3; world.players.solo.health = 42; });
+    await page.getByRole('button', { name: 'Restart run', exact: true }).click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'cancelRestartBtn');
+    assert.equal(await page.getByRole('button', { name: 'Keep paused', exact: true }).isVisible(), true);
+    const beforeChoice = await page.evaluate(() => JSON.stringify(world));
+    await page.waitForTimeout(150);
+    assert.equal(await page.evaluate(() => JSON.stringify(world)), beforeChoice);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
+    for (const id of ['cancelRestartBtn', 'confirmRestartBtn']) {
+      const box = await page.locator('#' + id).boundingBox();
+      assert.ok(box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width, `${id} is contained and usable`);
+    }
+    await page.screenshot({ path: `test-results/restart-choice-${width}.png`, fullPage: true });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => soloPaused), true);
+    assert.equal(await page.evaluate(() => world.score), 400);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'pauseBtn');
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await page.getByRole('button', { name: 'Restart run', exact: true }).click();
+    await page.getByRole('button', { name: 'Keep playing', exact: true }).click();
+    assert.equal(await page.evaluate(() => soloPaused), false);
+    assert.equal(await page.evaluate(() => world.score), 400);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'game');
+    await page.getByRole('button', { name: 'Restart run', exact: true }).click();
+    await page.getByRole('button', { name: 'Restart from wave 1', exact: true }).click();
     assert.equal(await page.evaluate(() => soloPaused), false);
     assert.equal(await page.evaluate(() => world.score), 0);
     assert.equal(await page.evaluate(() => world.players.solo.health), 100);
@@ -119,7 +143,7 @@ try {
     await page.getByRole('button', { name: 'Play solo', exact: true }).click();
     await page.waitForFunction(() => world?.phase === 'playing');
     assert.equal(await page.evaluate(() => Object.keys(world.players).length), 1);
-    results.push({ width, height, touch, soloWithoutSignaling: 'PASS', movementFireAbilities: 'PASS', pauseHelpResumeFocus: 'PASS', restartAndRecovery: 'PASS', overflow: false });
+    results.push({ width, height, touch, soloWithoutSignaling: 'PASS', movementFireAbilities: 'PASS', pauseHelpResumeFocus: 'PASS', restartChoiceCancelConfirm: 'PASS', restartAndRecovery: 'PASS', overflow: false });
     await context.close();
   }
   assert.deepEqual(errors, []);

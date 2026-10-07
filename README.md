@@ -12,7 +12,7 @@ python -m http.server 8080
 
 There is no npm install or build step for the game. **Play solo** works immediately without PeerJS or signaling. Multiplayer loads PeerJS 1.5.5 from cdnjs and uses its default signaling service; hosting/joining requires network access. You can switch to solo while a connection is pending.
 
-For an instant solo run, choose **Play solo**. **Pause** (or Escape while the arena is focused) freezes the whole simulation, including health, spawning and ability cooldowns. **Resume** returns focus to the arena with movement and firing released. Opening **Controls & tips** or switching away also pauses solo; returning does not resume automatically. **Restart wave** starts a fresh run, including from paused play.
+For an instant solo run, choose **Play solo**. **Pause** (or Escape while the arena is focused) freezes the whole simulation, including health, spawning and ability cooldowns. **Resume** returns focus to the arena with movement and firing released. Opening **Controls & tips** or switching away also pauses solo; returning does not resume automatically. **Restart run** pauses solo and offers a choice before resetting to wave 1, score 0 and full health. **Keep playing**, **Keep paused**, or Escape preserves the current run and its previous pause state.
 
 For multiplayer, use **Play with friends**:
 
@@ -20,7 +20,7 @@ For multiplayer, use **Play with friends**:
 2. Guests open the same game version, open the invite (which fills the code but does not auto-connect) or enter the code, then choose **Join Game** or press Enter.
 3. The room waits safely while players join. The host chooses **Start wave** when ready.
 4. Move with **WASD/arrows**, aim with the mouse and hold the **left mouse button** to fire. Hold **F** for keyboard-only assisted fire toward the nearest enemy. On touch screens, hold the movement pad and aim/fire on the arena.
-5. The host can **Restart wave** to reset score, enemies and health without reconnecting the group.
+5. The host can **Restart run**, then **Restart from wave 1**, to reset score, enemies and every player's health without reconnecting the group. The confirmation explains that the shared match keeps running while the host chooses; **Keep playing** cancels the reset.
 6. Use **Leave room** to return to the lobby. If the host leaves, guests must create or join another room.
 
 Connection failures and disconnections return to a usable lobby. **Cancel connection** stops a pending attempt immediately and retains the room code for retry; an attempt also times out after 15 seconds. Repeated clicks do not create multiple peers. Leaving cancels simulation/render timers and invalidates callbacks from the old room before retrying. Multiplayer has no pause: reading controls or switching away does not pause the shared match.

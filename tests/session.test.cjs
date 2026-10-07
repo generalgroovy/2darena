@@ -205,3 +205,70 @@ test('cancel pending connection tears down the attempt, retains code and ignores
  pending.emit('open','late');assert.equal(app.run('myId'),null);
  app.run('soloGame()');assert.equal(app.run('soloPaused'),false);
 });
+
+test('requesting a solo restart preserves progress and cancel resumes neutral play',()=>{
+ const app=setup();app.run('soloGame();world.score=700;world.wave=4;world.players.solo.health=42;keys.add("d");mouse.down=true;requestRestart()');
+ assert.equal(app.run('soloPaused'),true);assert.equal(app.run('world.score'),700);
+ assert.equal(app.elements.get('restartPrompt').hidden,false);
+ assert.equal(app.elements.get('pauseBtn').hidden,true);
+ assert.equal(app.document.activeElement,app.elements.get('cancelRestartBtn'));
+ assert.equal(app.elements.get('cancelRestartBtn').textContent,'Keep playing');
+ const frozen=app.run('JSON.stringify(world)');
+ app.run('setSoloPaused(false);queueAbility("pulse");for(let i=0;i<120;i++)hostTick()');
+ assert.equal(app.run('JSON.stringify(world)'),frozen);
+ app.elements.get('cancelRestartBtn').handlers.click();
+ assert.equal(app.run('soloPaused'),false);assert.equal(app.run('world.wave'),4);
+ assert.equal(app.run('world.players.solo.health'),42);assert.equal(app.run('world.score'),700);
+ assert.equal(app.run('localInput().right || localInput().shoot || localInput().pulse'),false);
+ assert.equal(app.document.activeElement,app.elements.get('game'));
+ assert.equal(app.elements.get('restartPrompt').hidden,true);
+});
+
+test('cancel and Escape preserve an already paused run',()=>{
+ const app=setup();app.run('soloGame();setSoloPaused(true);requestRestart()');
+ assert.equal(app.elements.get('cancelRestartBtn').textContent,'Keep paused');
+ const frozen=app.run('JSON.stringify(world)');let prevented=false;
+ app.elements.get('restartPrompt').handlers.keydown({key:'Escape',preventDefault(){prevented=true;}});
+ assert.equal(prevented,true);assert.equal(app.run('soloPaused'),true);
+ assert.equal(app.run('JSON.stringify(world)'),frozen);
+ assert.equal(app.document.activeElement,app.elements.get('pauseBtn'));
+ assert.equal(app.elements.get('pauseBtn').hidden,false);
+ assert.equal(app.elements.get('pauseBtn').textContent,'Resume');
+});
+
+test('confirmed restart resets the full run exactly once and restores play focus',()=>{
+ const app=setup();app.run('soloGame();world.score=700;world.wave=4;world.players.solo.health=42;world.players.solo.pulseCooldown=2;requestRestart()');
+ app.elements.get('confirmRestartBtn').handlers.click();
+ assert.equal(app.run('world.score'),0);assert.equal(app.run('world.wave'),1);
+ assert.equal(app.run('world.players.solo.health'),100);assert.equal(app.run('world.players.solo.pulseCooldown'),0);
+ assert.equal(app.run('world.enemies.length'),0);assert.equal(app.run('soloPaused'),false);
+ assert.equal(app.document.activeElement,app.elements.get('game'));
+ assert.equal(app.elements.get('startBtn').textContent,'Restart run');
+ assert.equal(app.elements.get('restartPrompt').hidden,true);assert.equal(app.intervals.size,1);
+ app.run('world.score=23;confirmRestart()');assert.equal(app.run('world.score'),23);
+});
+
+test('host starts waiting rooms directly but confirms a shared reset without pausing or dropping members',()=>{
+ const app=setup();app.run('hostGame()');const peer=app.peers[0];peer.emit('open','arena-host');
+ const guest=app.makeConnection('guest');peer.emit('connection',guest);guest.emit('open');
+ app.elements.get('startBtn').handlers.click();assert.equal(app.run('world.phase'),'playing');
+ assert.equal(app.run('pendingRestart'),null);
+ app.run('world.score=88;world.players.guest.health=25;requestRestart()');
+ assert.match(app.elements.get('restartHeading').textContent,/everyone/);
+ assert.match(app.elements.get('restartDetails').textContent,/keeps running/);
+ assert.equal(app.run('soloPaused'),false);app.run('hostTick()');assert.equal(app.run('world.enemies.length'),1);
+ app.run('cancelRestart()');assert.equal(app.run('world.score'),88);assert.equal(app.run('world.players.guest.health'),25);
+ app.run('requestRestart();confirmRestart()');
+ assert.equal(app.run('world.score'),0);assert.equal(app.run('world.players.guest.health'),100);
+ assert.equal(app.run('Object.keys(world.players).length'),2);assert.equal(app.run('conns.size'),1);
+ assert.equal(app.intervals.size,2);assert.equal(app.peers.length,1);assert.equal(guest.open,true);
+});
+
+test('leaving clears restart choice and late confirm cannot reset another run or a guest',()=>{
+ const app=setup();app.run('soloGame();requestRestart();stopSession();soloGame();world.score=99;confirmRestart()');
+ assert.equal(app.run('world.score'),99);assert.equal(app.run('pendingRestart'),null);
+ assert.equal(app.elements.get('restartPrompt').hidden,true);
+ app.run('stopSession();joinGame()');app.peers[0].emit('open','me');app.peers[0].conn.emit('open');
+ app.run('requestRestart();confirmRestart()');assert.equal(app.run('pendingRestart'),null);
+ assert.equal(app.elements.get('startBtn').hidden,true);
+});

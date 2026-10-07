@@ -22,11 +22,14 @@ const inviteLink = document.getElementById("inviteLink");
 const pauseBtn = document.getElementById("pauseBtn");
 const gameHelp = document.getElementById("gameHelp");
 const cancelConnectBtn = document.getElementById("cancelConnectBtn");
+const restartPrompt = document.getElementById("restartPrompt");
+const cancelRestartBtn = document.getElementById("cancelRestartBtn");
 
 let peer = null;
 let isHost = false;
 let isSolo = false;
 let soloPaused = false;
+let pendingRestart = null;
 let myId = null;
 let hostId = null;
 let conns = new Map();
@@ -60,6 +63,7 @@ function stopSession(message = "Left room.", restoreFocus = true) {
   isHost = false;
   isSolo = false;
   soloPaused = false;
+  clearRestartPrompt();
   myId = null;
   hostId = null;
   releaseControls();
@@ -157,6 +161,7 @@ function showGame(roomCode) {
 }
 
 function setSoloPaused(paused, focus = true) {
+  if (pendingRestart && !paused) return;
   if (!isSolo || !world || world.phase !== "playing" || soloPaused === paused) return;
   soloPaused = paused;
   releaseControls();
@@ -179,16 +184,57 @@ function initWorld() {
 
 function startRound() {
   if (!isHost || !world) return;
+  clearRestartPrompt();
   ArenaModel.startRound(world);
   soloPaused = false;
   pauseBtn.textContent = "Pause";
   gameHelp.open = false;
   releaseControls();
-  startBtn.textContent = "Restart wave";
+  startBtn.textContent = "Restart run";
   snapshot = compressWorld(world);
   broadcastSnapshot();
   setStatus(isSolo ? "Solo in progress. Hold F for assisted fire." : "Wave in progress. Hold F for assisted fire.");
   canvas.focus();
+}
+
+function clearRestartPrompt() {
+  pendingRestart = null;
+  restartPrompt.hidden = true;
+  startBtn.hidden = !isHost;
+  pauseBtn.hidden = !isSolo;
+}
+
+function requestRestart() {
+  if (!isHost || !world) return;
+  if (world.phase !== "playing") { startRound(); return; }
+  if (!pendingRestart) {
+    pendingRestart = { token: session, wasPaused: soloPaused };
+    releaseControls();
+    if (isSolo) setSoloPaused(true, false);
+    document.getElementById("restartHeading").textContent = isSolo ? "Restart this run?" : "Restart for everyone?";
+    document.getElementById("restartDetails").textContent = isSolo
+      ? "Return to wave 1 with score 0 and full health. This run is paused while you choose."
+      : "Every player returns to wave 1 with score 0 and full health. The room stays connected; the shared match keeps running while you choose.";
+    cancelRestartBtn.textContent = isSolo && pendingRestart.wasPaused ? "Keep paused" : "Keep playing";
+    restartPrompt.hidden = false;
+    startBtn.hidden = true;
+    pauseBtn.hidden = true;
+  }
+  cancelRestartBtn.focus();
+  restartPrompt.scrollIntoView?.({ block: "nearest" });
+}
+
+function cancelRestart() {
+  if (!pendingRestart || pendingRestart.token !== session) return;
+  const wasPaused = pendingRestart.wasPaused;
+  clearRestartPrompt();
+  if (isSolo && !wasPaused) setSoloPaused(false);
+  else (isSolo && wasPaused ? pauseBtn : canvas).focus();
+}
+
+function confirmRestart() {
+  if (!pendingRestart || pendingRestart.token !== session || !isHost || !world) return;
+  startRound();
 }
 
 async function copyInvite() {
@@ -451,7 +497,7 @@ function drawSnapshot(s) {
     ctx.fillStyle = "#ffffff";
     ctx.font = "22px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(soloPaused ? "Paused · Resume when ready" : me?.alive === false ? "Respawning…" : isHost ? "Ready? Start wave below." : "Waiting for host", W / 2, H / 2 + 8);
+    ctx.fillText(soloPaused ? pendingRestart ? "Restart run? Choose below." : "Paused · Resume when ready" : me?.alive === false ? "Respawning…" : isHost ? "Ready? Start wave below." : "Waiting for host", W / 2, H / 2 + 8);
   }
 }
 
@@ -492,7 +538,7 @@ window.addEventListener("keydown", e => {
   if (e.target !== canvas || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === "Escape" && isSolo) {
     e.preventDefault();
-    if (!e.repeat) setSoloPaused(!soloPaused);
+    if (!e.repeat) pendingRestart ? cancelRestart() : setSoloPaused(!soloPaused);
     return;
   }
   if (isSolo && soloPaused) return;
@@ -555,7 +601,10 @@ document.getElementById("leaveBtn").addEventListener("click", () => stopSession(
 cancelConnectBtn.addEventListener("click", () => stopSession("Connection cancelled. Host or join when ready."));
 pauseBtn.addEventListener("click", () => setSoloPaused(!soloPaused));
 gameHelp.addEventListener("toggle", () => { if (gameHelp.open) setSoloPaused(true, false); });
-startBtn.addEventListener("click", startRound);
+startBtn.addEventListener("click", requestRestart);
+cancelRestartBtn.addEventListener("click", cancelRestart);
+document.getElementById("confirmRestartBtn").addEventListener("click", confirmRestart);
+restartPrompt.addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); if (!e.repeat) cancelRestart(); } });
 document.getElementById("copyBtn").addEventListener("click", copyInvite);
 if (window.location?.href) {
   const room = new URL(window.location.href).searchParams.get("room");

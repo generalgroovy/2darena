@@ -61,6 +61,11 @@
         <div id="gameStatus" role="status"></div>
         <div id="roomInfo">Room: —</div>
         <div id="stats">Players: 0 · Enemies: 0 · Score: 0</div>
+        <section id="restartPrompt" aria-labelledby="restartHeading" hidden>
+          <h2 id="restartHeading">Restart this run?</h2>
+          <p id="restartDetails"></p>
+          <div class="restart-actions"><button id="cancelRestartBtn" type="button">Keep playing</button><button id="confirmRestartBtn" class="secondary" type="button">Restart from wave 1</button></div>
+        </section>
       </div>
       <input id="inviteLink" aria-label="Room invite link; select and copy" readonly hidden />
       <details id="gameHelp"><summary>Controls &amp; tips</summary>
