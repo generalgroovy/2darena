@@ -30,7 +30,7 @@ try {
     // Prove the solo journey stays usable when the signaling library is unavailable.
     await page.route('https://cdnjs.cloudflare.com/**', route => route.abort());
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.getByText('Solo is ready · no connection needed', { exact: true }).isVisible(), true);
+    assert.equal(await page.getByText('Solo works without a connection', { exact: true }).isVisible(), true);
     assert.match(await page.locator('#status').textContent(), /Host a room or join/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `lobby overflow at ${width}`);
     await page.screenshot({ path: `test-results/lobby-${width}.png`, fullPage: true });

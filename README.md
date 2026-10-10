@@ -25,7 +25,7 @@ For multiplayer, use **Play with friends**:
 
 Connection failures and disconnections return to a usable lobby. **Cancel connection** stops a pending attempt immediately and retains the room code for retry; an attempt also times out after 15 seconds. Repeated clicks do not create multiple peers. Leaving cancels simulation/render timers and invalidates callbacks from the old room before retrying. Multiplayer has no pause: reading controls or switching away does not pause the shared match.
 
-## Two tools, many ways to survive
+## Combat abilities
 
 - **Dash — Space/Shift or Dash button:** move in your movement direction (or aim direction when standing still), briefly protected from contact. Ready again after 1.6 seconds. Use it to cross a charge lane, escape a crowd or reposition for a shot.
 - **Pulse — Q or Pulse button:** a larger shot that deals three damage, nudges enemies back and pierces up to four targets. Ready again after 2.4 seconds. Line up groups rather than spending it on one weak enemy. Release and press again for each ability.

@@ -23,9 +23,9 @@ main {
   min-width: 0;
   background: #172033;
   border: 1px solid #33425f;
-  border-radius: 18px;
+  border-radius: 6px;
   padding: 26px;
-  box-shadow: 0 18px 50px rgba(0,0,0,.35);
+  box-shadow: none;
 }
 
 h1 {
@@ -59,7 +59,7 @@ p {
 
 input, button {
   font: inherit;
-  border-radius: 12px;
+  border-radius: 5px;
   border: 1px solid #4b5f82;
   padding: 12px 14px;
 }
@@ -132,7 +132,7 @@ canvas {
   overflow-wrap: anywhere;
 }
 
-#restartPrompt { flex-basis: 100%; min-width: 0; border: 1px solid #64748b; border-radius: 12px; padding: 14px; background: #172033; }
+#restartPrompt { flex-basis: 100%; min-width: 0; border: 1px solid #64748b; border-radius: 5px; padding: 14px; background: #172033; }
 #restartPrompt h2 { font-size: 18px; margin: 0 0 6px; }
 #restartPrompt p { margin: 0 0 12px; }
 .restart-actions { display: flex; flex-wrap: wrap; gap: 10px; }

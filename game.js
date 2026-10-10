@@ -497,7 +497,7 @@ function drawSnapshot(s) {
     ctx.fillStyle = "#ffffff";
     ctx.font = "22px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(soloPaused ? pendingRestart ? "Restart run? Choose below." : "Paused · Resume when ready" : me?.alive === false ? "Respawning…" : isHost ? "Ready? Start wave below." : "Waiting for host", W / 2, H / 2 + 8);
+    ctx.fillText(soloPaused ? pendingRestart ? "Restart run? Choose below." : "Paused" : me?.alive === false ? "Respawning…" : isHost ? "Start wave below" : "Waiting for host", W / 2, H / 2 + 8);
   }
 }
 
@@ -598,7 +598,7 @@ joinCodeEl.addEventListener("keydown", e => {
 });
 
 document.getElementById("leaveBtn").addEventListener("click", () => stopSession());
-cancelConnectBtn.addEventListener("click", () => stopSession("Connection cancelled. Host or join when ready."));
+cancelConnectBtn.addEventListener("click", () => stopSession("Connection cancelled. Room code kept."));
 pauseBtn.addEventListener("click", () => setSoloPaused(!soloPaused));
 gameHelp.addEventListener("toggle", () => { if (gameHelp.open) setSoloPaused(true, false); });
 startBtn.addEventListener("click", requestRestart);
